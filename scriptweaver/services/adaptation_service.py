@@ -5,7 +5,12 @@ from dataclasses import replace
 
 from scriptweaver.ai.provider import AIAnalysisProvider
 from scriptweaver.domain.analysis_validation import validate_analysis
-from scriptweaver.domain.models import AIAnalysis, AdaptationJob, Chapter
+from scriptweaver.domain.models import (
+    AIAnalysis,
+    AdaptationJob,
+    Chapter,
+    Uncertainty,
+)
 from scriptweaver.domain.workflow import AdaptationState, ensure_transition_allowed
 
 
@@ -67,3 +72,28 @@ class AdaptationService:
             state=AdaptationState.ANALYSIS_CONFIRMED,
             confirmed_analysis=deepcopy(confirmed_analysis),
         )
+
+    def get_next_unanswered_uncertainty(
+        self,
+        job: AdaptationJob,
+    ) -> Uncertainty | None:
+        if job.state != AdaptationState.ANALYSIS_GENERATED:
+            raise AdaptationServiceError(
+                "get_next_unanswered_uncertainty requires "
+                "ANALYSIS_GENERATED state"
+            )
+        if job.ai_analysis is None:
+            return None
+
+        resolved_ids: set[str] = set()
+        if job.user_confirmations is not None:
+            for resolution in (
+                job.user_confirmations.uncertainty_resolutions
+            ):
+                resolved_ids.add(resolution.uncertainty_id)
+
+        for uncertainty in job.ai_analysis.uncertainties:
+            if uncertainty.id not in resolved_ids:
+                return uncertainty
+
+        return None

@@ -10,6 +10,10 @@ from scriptweaver.domain.models import (
     Character,
     Conflict,
     KeyEvent,
+    Uncertainty,
+    UncertaintyOption,
+    UncertaintyResolution,
+    UserConfirmations,
 )
 from scriptweaver.domain.workflow import AdaptationState, WorkflowTransitionError
 from scriptweaver.services.adaptation_service import (
@@ -311,3 +315,105 @@ def test_confirm_analysis_deep_copies_submitted_snapshot():
     confirmed_analysis.key_events.clear()
 
     assert updated_job.confirmed_analysis == make_confirmed_analysis()
+
+
+# ── get_next_unanswered_uncertainty ──────────────────────────────
+
+
+def test_get_next_unanswered_returns_first_uncertainty_when_no_resolutions():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+
+    result = service.get_next_unanswered_uncertainty(job)
+
+    assert result is not None
+    assert result.id == "uncertainty_001"
+
+
+def test_get_next_unanswered_returns_none_when_all_resolved():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="option_001",
+    )
+    job = replace(
+        job,
+        user_confirmations=UserConfirmations(
+            uncertainty_resolutions=[resolution],
+        ),
+    )
+
+    result = service.get_next_unanswered_uncertainty(job)
+
+    assert result is None
+
+
+def test_get_next_unanswered_skips_resolved_and_returns_next():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    # Manually add a second uncertainty to the analysis
+    uncertainties = list(job.ai_analysis.uncertainties) + [
+        Uncertainty(
+            id="uncertainty_002",
+            question="第二个问题",
+            context="更多上下文。",
+            options=[
+                UncertaintyOption(
+                    id="option_a",
+                    label="选项A",
+                    description="描述A",
+                    impact="影响A",
+                ),
+                UncertaintyOption(
+                    id="option_b",
+                    label="选项B",
+                    description="描述B",
+                    impact="影响B",
+                ),
+            ],
+            allow_custom_answer=True,
+            source_chapter_indexes=[1, 2, 3],
+        )
+    ]
+    job = replace(
+        job,
+        ai_analysis=replace(job.ai_analysis, uncertainties=uncertainties),
+        user_confirmations=UserConfirmations(
+            uncertainty_resolutions=[
+                UncertaintyResolution(
+                    uncertainty_id="uncertainty_001",
+                    selected_option_id="option_001",
+                ),
+            ],
+        ),
+    )
+
+    result = service.get_next_unanswered_uncertainty(job)
+
+    assert result is not None
+    assert result.id == "uncertainty_002"
+
+
+def test_get_next_unanswered_returns_none_when_no_uncertainties():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    job = replace(
+        job,
+        ai_analysis=replace(job.ai_analysis, uncertainties=[]),
+    )
+
+    result = service.get_next_unanswered_uncertainty(job)
+
+    assert result is None
+
+
+def test_get_next_unanswered_rejects_wrong_state():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = service.create_job("job-001")
+
+    with pytest.raises(
+        AdaptationServiceError,
+        match="get_next_unanswered_uncertainty requires ANALYSIS_GENERATED",
+    ):
+        service.get_next_unanswered_uncertainty(job)
