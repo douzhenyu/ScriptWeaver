@@ -109,8 +109,12 @@ def test_full_workflow_from_create_to_export():
     assert job.state == AdaptationState.SCREENPLAY_GENERATED
     draft = job.screenplay_draft
     assert draft is not None
-    assert draft.scene_ids == ["scene_001", "scene_002", "scene_003"]
+    scene_ids = [s.id for s in draft.scenes]
+    assert scene_ids == ["scene_001", "scene_002", "scene_003"]
     assert len(draft.revision_notes) == 3
+    # Verify beats are present
+    for scene in draft.scenes:
+        assert len(scene.beats) >= 2
 
     # ── Stage 9: Export to YAML ──────────────────────────────
     metadata = {
@@ -153,7 +157,9 @@ def test_full_workflow_from_create_to_export():
     assert len(plan_yaml["scenes"][0]["compression_choices"]) >= 1
 
     # Verify screenplay draft
-    assert parsed["screenplay"]["scene_ids"] == [
+    screenplay = parsed["screenplay"]
+    scene_ids = [s["id"] for s in screenplay["scenes"]]
+    assert scene_ids == [
         "scene_001", "scene_002", "scene_003",
     ]
 

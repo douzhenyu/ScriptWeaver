@@ -5,6 +5,7 @@ from scriptweaver.domain.models import (
     AIAnalysis,
     AdaptationDecision,
     AdaptationPlan,
+    Beat,
     CandidateScene,
     Chapter,
     Character,
@@ -12,8 +13,10 @@ from scriptweaver.domain.models import (
     Conflict,
     KeyEvent,
     PlanReviewQuestion,
+    SceneHeading,
     ScenePlan,
     ScreenplayDraft,
+    ScreenplayScene,
     Theme,
     Uncertainty,
     UncertaintyOption,
@@ -229,9 +232,40 @@ class MockScreenplayProvider:
         confirmed_plan: AdaptationPlan,
         chapters: list[Chapter],
     ) -> ScreenplayDraft:
-        scene_ids = [scene.id for scene in confirmed_plan.scenes]
         return ScreenplayDraft(
-            scene_ids=list(scene_ids),
+            scenes=[
+                ScreenplayScene(
+                    id=plan_scene.id,
+                    heading=SceneHeading(
+                        location="待作者确认",
+                        time="待作者确认",
+                        interior_exterior="INT",
+                    ),
+                    source_chapter_indexes=list(
+                        plan_scene.source_chapter_indexes
+                    ),
+                    character_ids=list(plan_scene.character_ids),
+                    beats=[
+                        Beat(
+                            type="action",
+                            text=(
+                                f"场景「{plan_scene.title}」开场："
+                                f"{plan_scene.dramatic_purpose}"
+                            ),
+                        ),
+                        Beat(
+                            type="dialogue",
+                            text="待生成对白。",
+                            character_id=(
+                                plan_scene.character_ids[0]
+                                if plan_scene.character_ids
+                                else None
+                            ),
+                        ),
+                    ],
+                )
+                for plan_scene in confirmed_plan.scenes
+            ],
             revision_notes=[
                 f"场景 {scene.scene_order}「{scene.title}」需要导演审查节奏。"
                 for scene in confirmed_plan.scenes
