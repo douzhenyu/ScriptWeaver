@@ -14,6 +14,8 @@ from scriptweaver.domain.models import (
     PlanReviewQuestion,
     ScenePlan,
     ScreenplayDraft,
+    UncertaintyOption,
+    UncertaintyResolution,
     UserConfirmations,
 )
 from scriptweaver.domain.workflow import (
@@ -34,6 +36,8 @@ __all__ = [
     "PlanReviewQuestion",
     "ScenePlan",
     "ScreenplayDraft",
+    "UncertaintyOption",
+    "UncertaintyResolution",
     "UserConfirmations",
     "WorkflowTransitionError",
     "ensure_transition_allowed",
