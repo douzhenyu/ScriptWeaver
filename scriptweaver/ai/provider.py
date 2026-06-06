@@ -6,6 +6,7 @@ from scriptweaver.domain.models import (
     AIAnalysis,
     AdaptationPlan,
     Chapter,
+    ScreenplayDraft,
 )
 
 
@@ -25,3 +26,12 @@ class AdaptationPlanProvider(Protocol):
         chapters: list[Chapter],
     ) -> AdaptationPlan:
         """Generate adaptation plan from confirmed analysis and chapters."""
+
+
+class ScreenplayProvider(Protocol):
+    def generate_screenplay(
+        self,
+        confirmed_plan: AdaptationPlan,
+        chapters: list[Chapter],
+    ) -> ScreenplayDraft:
+        """Generate screenplay draft from confirmed plan and chapters."""

@@ -5,6 +5,7 @@ import pytest
 from scriptweaver.ai.mock_provider import (
     MockAIAnalysisProvider,
     MockPlanProvider,
+    MockScreenplayProvider,
 )
 from scriptweaver.domain.analysis_validation import AnalysisValidationError
 from scriptweaver.domain.models import (
@@ -15,6 +16,7 @@ from scriptweaver.domain.models import (
     Conflict,
     KeyEvent,
     ScenePlan,
+    ScreenplayDraft,
     Uncertainty,
     UncertaintyOption,
     UncertaintyResolution,
@@ -850,6 +852,46 @@ def make_plan_generated_job(service: AdaptationService):
     )
 
 
+def make_plan_confirmed_job(service: AdaptationService):
+    """Build a job in PLAN_CONFIRMED state with a confirmed plan."""
+    job = service.create_job("job-001")
+    job = service.attach_chapters(job, make_chapters())
+    job = service.generate_analysis(job)
+    analysis = job.ai_analysis
+    job = service.confirm_analysis(job, analysis)
+    plan = AdaptationPlan(
+        target_format="short_drama",
+        structure="3 scenes, linear progression",
+        scenes=[
+            ScenePlan(
+                id="scene_001",
+                scene_order=1,
+                title="第一幕",
+                dramatic_purpose="建立冲突。",
+                character_ids=["char_001"],
+                source_chapter_indexes=[1],
+                retained_event_ids=["event_001"],
+                source_candidate_scene_ids=["candidate_scene_001"],
+            ),
+            ScenePlan(
+                id="scene_002",
+                scene_order=2,
+                title="第二幕",
+                dramatic_purpose="升级冲突。",
+                character_ids=["char_001"],
+                source_chapter_indexes=[2],
+                retained_event_ids=["event_002"],
+                source_candidate_scene_ids=["candidate_scene_002"],
+            ),
+        ],
+    )
+    return replace(
+        job,
+        state=AdaptationState.PLAN_CONFIRMED,
+        adaptation_plan=plan,
+    )
+
+
 def test_confirm_plan_validates_and_advances_state():
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_plan_generated_job(service)
@@ -915,3 +957,134 @@ def test_confirm_plan_original_job_unchanged():
 
     assert job.state == AdaptationState.PLAN_GENERATED
     assert job.adaptation_plan is original_plan
+# ── generate_screenplay ───────────────────────────────────────────
+
+
+class RecordingScreenplayProvider:
+    def __init__(self) -> None:
+        self.received_plan: AdaptationPlan | None = None
+        self.received_chapters: list[Chapter] | None = None
+        self.draft = ScreenplayDraft(
+            scene_ids=["scene_001", "scene_002"],
+            revision_notes=["审查节奏。"],
+        )
+
+    def generate_screenplay(
+        self,
+        confirmed_plan: AdaptationPlan,
+        chapters: list[Chapter],
+    ) -> ScreenplayDraft:
+        self.received_plan = confirmed_plan
+        self.received_chapters = chapters
+        return self.draft
+
+
+def test_generate_screenplay_advances_state_and_stores_draft():
+    provider = RecordingScreenplayProvider()
+    service = AdaptationService(
+        MockAIAnalysisProvider(),
+        screenplay_provider=provider,
+    )
+    job = make_plan_confirmed_job(service)
+
+    updated_job = service.generate_screenplay(job)
+
+    assert updated_job is not job
+    assert updated_job.state == AdaptationState.SCREENPLAY_GENERATED
+    assert updated_job.screenplay_draft is not None
+    assert (
+        updated_job.screenplay_draft.scene_ids
+        == ["scene_001", "scene_002"]
+    )
+    assert updated_job.screenplay_draft == provider.draft
+    assert job.state == AdaptationState.PLAN_CONFIRMED
+    assert job.screenplay_draft is None
+
+
+def test_generate_screenplay_passes_plan_to_provider():
+    provider = RecordingScreenplayProvider()
+    service = AdaptationService(
+        MockAIAnalysisProvider(),
+        screenplay_provider=provider,
+    )
+    job = make_plan_confirmed_job(service)
+
+    service.generate_screenplay(job)
+
+    assert provider.received_plan is job.adaptation_plan
+    assert provider.received_chapters == job.chapters
+
+
+def test_generate_screenplay_rejects_wrong_state():
+    service = AdaptationService(
+        MockAIAnalysisProvider(),
+        screenplay_provider=MockScreenplayProvider(),
+    )
+    job = service.create_job("job-001")
+
+    with pytest.raises(WorkflowTransitionError, match="Cannot transition"):
+        service.generate_screenplay(job)
+
+
+def test_generate_screenplay_requires_screenplay_provider():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_plan_confirmed_job(service)
+
+    with pytest.raises(
+        AdaptationServiceError,
+        match="No screenplay provider configured",
+    ):
+        service.generate_screenplay(job)
+
+
+def test_generate_screenplay_deep_copies_provider_draft():
+    provider = RecordingScreenplayProvider()
+    service = AdaptationService(
+        MockAIAnalysisProvider(),
+        screenplay_provider=provider,
+    )
+    job = make_plan_confirmed_job(service)
+
+    updated_job = service.generate_screenplay(job)
+    provider.draft.scene_ids.clear()
+    provider.draft.revision_notes.clear()
+
+    assert (
+        updated_job.screenplay_draft.scene_ids
+        == ["scene_001", "scene_002"]
+    )
+    assert (
+        updated_job.screenplay_draft.revision_notes == ["审查节奏。"]
+    )
+
+
+def test_generate_screenplay_original_job_unchanged():
+    provider = RecordingScreenplayProvider()
+    service = AdaptationService(
+        MockAIAnalysisProvider(),
+        screenplay_provider=provider,
+    )
+    job = make_plan_confirmed_job(service)
+
+    service.generate_screenplay(job)
+
+    assert job.state == AdaptationState.PLAN_CONFIRMED
+    assert job.screenplay_draft is None
+
+
+def test_generate_screenplay_with_mock_provider():
+    service = AdaptationService(
+        MockAIAnalysisProvider(),
+        plan_provider=MockPlanProvider(),
+        screenplay_provider=MockScreenplayProvider(),
+    )
+    job = make_plan_confirmed_job(service)
+
+    updated_job = service.generate_screenplay(job)
+
+    assert updated_job.state == AdaptationState.SCREENPLAY_GENERATED
+    draft = updated_job.screenplay_draft
+    assert draft is not None
+    assert draft.scene_ids == ["scene_001", "scene_002"]
+    assert len(draft.revision_notes) == 2
+    assert "场景 1" in draft.revision_notes[0]

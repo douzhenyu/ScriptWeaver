@@ -6,6 +6,7 @@ from dataclasses import replace
 from scriptweaver.ai.provider import (
     AIAnalysisProvider,
     AdaptationPlanProvider,
+    ScreenplayProvider,
 )
 from scriptweaver.domain.analysis_validation import validate_analysis
 from scriptweaver.domain.models import (
@@ -33,9 +34,11 @@ class AdaptationService:
         self,
         ai_provider: AIAnalysisProvider,
         plan_provider: AdaptationPlanProvider | None = None,
+        screenplay_provider: ScreenplayProvider | None = None,
     ) -> None:
         self._ai_provider = ai_provider
         self._plan_provider = plan_provider
+        self._screenplay_provider = screenplay_provider
 
     def create_job(self, job_id: str) -> AdaptationJob:
         return AdaptationJob(id=job_id)
@@ -196,4 +199,30 @@ class AdaptationService:
             job,
             state=AdaptationState.PLAN_CONFIRMED,
             adaptation_plan=deepcopy(confirmed_plan),
+        )
+
+    def generate_screenplay(self, job: AdaptationJob) -> AdaptationJob:
+        ensure_transition_allowed(
+            job.state, AdaptationState.SCREENPLAY_GENERATED
+        )
+
+        if self._screenplay_provider is None:
+            raise AdaptationServiceError(
+                "No screenplay provider configured"
+            )
+
+        if job.adaptation_plan is None:
+            raise AdaptationServiceError(
+                "No adaptation plan to generate screenplay from"
+            )
+
+        draft = self._screenplay_provider.generate_screenplay(
+            job.adaptation_plan,
+            list(job.chapters),
+        )
+
+        return replace(
+            job,
+            state=AdaptationState.SCREENPLAY_GENERATED,
+            screenplay_draft=deepcopy(draft),
         )
