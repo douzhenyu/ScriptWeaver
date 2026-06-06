@@ -21,6 +21,7 @@ schema_version: "1.0"
 metadata: {}
 source: {}
 ai_analysis: {}
+confirmed_analysis: {}
 user_confirmations: {}
 adaptation_plan: {}
 screenplay: {}
@@ -210,6 +211,39 @@ Uncertainty remains visible so AI does not silently convert ambiguous interpreta
 
 The `ai_analysis` field names exactly match the backend's `AIAnalysis.to_dict()` output. This keeps the YAML readable while avoiding a separate export mapping layer.
 
+### `confirmed_analysis`
+
+Type: object
+
+Required: yes
+
+Structure:
+
+`confirmed_analysis` follows the complete `ai_analysis` structure defined above. It contains the same seven required lists and uses the same item fields:
+
+- `characters`
+- `relationships`
+- `key_events`
+- `conflicts`
+- `themes`
+- `candidate_scenes`
+- `uncertainties`
+
+All seven lists must exist, but any or all of them may be empty. Seven empty lists explicitly mean that the author rejected every AI conclusion.
+
+Unlike a patch or action log, `confirmed_analysis` is a complete trusted snapshot. The author may retain, edit, delete, or add analysis items. Its IDs do not need to match raw `ai_analysis` IDs.
+
+Reference rules:
+
+- IDs are unique within each confirmed-analysis category.
+- `source_character_id`, `target_character_id`, and `character_ids` reference `confirmed_analysis.characters`.
+- `source_chapter_indexes` reference `source.chapters`.
+- References do not need to point to raw `ai_analysis` items.
+
+Design reason:
+
+Keeping raw and confirmed analysis separately makes the AI contribution and author corrections reviewable. A complete confirmed snapshot lets later stages read one trusted structure without replaying accept, reject, and edit operations.
+
 ### `user_confirmations`
 
 Type: object
@@ -229,7 +263,7 @@ Fields:
 
 Design reason:
 
-The final script should be based on user-confirmed creative decisions, not raw AI guesses.
+`confirmed_analysis` stores the user's trusted structured story analysis. `user_confirmations` stores guidance outside that analysis, such as required plot points, style preferences, and free-form notes.
 
 ### `adaptation_plan`
 
@@ -259,7 +293,7 @@ Each `scene_breakdown` item:
 
 Design reason:
 
-Adaptation is a planning problem. Recording the plan lets users understand and revise the AI's creative decisions.
+Adaptation is a planning problem. The plan must be based on `confirmed_analysis`, not raw `ai_analysis`. Recording the plan lets users understand and revise the AI's creative decisions.
 
 ### `screenplay`
 
@@ -418,6 +452,67 @@ ai_analysis:
       question: "沈微是否提前知道密信内容？"
       context: "答案会影响沈微阻止林照的动机和后续冲突。"
       source_chapter_indexes: [1, 2]
+confirmed_analysis:
+  characters:
+    - id: "char_001"
+      name: "林照"
+      role: "protagonist"
+      description: "执着追查父亲失踪真相的年轻记者。"
+      goal: "查明父亲失踪和旧案之间的联系。"
+      motivation: "确认父亲留下密信的真实意图，并保护仍然在世的家人。"
+    - id: "char_002"
+      name: "沈微"
+      role: "supporting"
+      description: "掌握旧案线索、但担心真相造成伤害的协助者。"
+      goal: "控制调查范围并保护无辜者。"
+      motivation: "避免旧案相关人员再次受到伤害。"
+  relationships:
+    - id: "relationship_001"
+      source_character_id: "char_001"
+      target_character_id: "char_002"
+      description: "两人共同调查，但对是否公开真相存在分歧。"
+      source_chapter_indexes: [1, 2, 3]
+  key_events:
+    - id: "event_001"
+      summary: "林照收到父亲留下的密信。"
+      character_ids: ["char_001"]
+      source_chapter_indexes: [1]
+    - id: "event_002"
+      summary: "沈微出现并阻止林照公开密信。"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [2]
+    - id: "event_003"
+      summary: "林照和沈微发现密信指向旧案。"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [3]
+  conflicts:
+    - id: "conflict_001"
+      description: "林照想公开真相，沈微担心真相会伤害无辜者。"
+      stakes: "如果两人无法决定公开范围，旧案受害者和林照的家人都可能再次受到威胁。"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [1, 2, 3]
+  themes:
+    - id: "theme_001"
+      statement: "追求真相需要面对公开真相的代价。"
+      source_chapter_indexes: [1, 2, 3]
+  candidate_scenes:
+    - id: "candidate_scene_001"
+      title: "密信出现"
+      summary: "林照收到父亲留下的密信。"
+      dramatic_purpose: "引出调查目标和主线悬念。"
+      location: "茶馆"
+      time_hint: "夜"
+      character_ids: ["char_001"]
+      source_chapter_indexes: [1]
+    - id: "candidate_scene_003"
+      title: "旧案线索"
+      summary: "两人发现密信指向旧案。"
+      dramatic_purpose: "揭示密信与旧案的关联。"
+      location: "旧档案室"
+      time_hint: "凌晨"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [3]
+  uncertainties: []
 user_confirmations:
   accepted_character_ids: ["char_001", "char_002"]
   rejected_character_ids: []
@@ -514,7 +609,7 @@ revision_notes:
 Future implementations should validate:
 
 - `schema_version` exists.
-- `metadata`, `source`, `ai_analysis`, `user_confirmations`, `adaptation_plan`, `screenplay`, and `revision_notes` are required top-level sections.
+- `metadata`, `source`, `ai_analysis`, `confirmed_analysis`, `user_confirmations`, `adaptation_plan`, `screenplay`, and `revision_notes` are required top-level sections.
 - `source.chapter_count` is at least 1.
 - `source.chapters` length matches `source.chapter_count`.
 - All seven `ai_analysis` list fields exist, even when a list is empty.
@@ -524,6 +619,12 @@ Future implementations should validate:
 - `source_chapter_indexes` reference existing `source.chapters` indexes.
 - Candidate scenes are suggestions and do not need to match or order final screenplay scenes.
 - Uncertainty questions remain available for user confirmation.
+- `confirmed_analysis` follows the same seven-list and item-field rules as `ai_analysis`.
+- Confirmed analysis item IDs are unique within their category.
+- Confirmed `source_character_id`, `target_character_id`, and `character_ids` reference `confirmed_analysis.characters` IDs.
+- Confirmed `source_chapter_indexes` reference existing `source.chapters` indexes.
+- `confirmed_analysis` may contain seven empty lists.
+- `adaptation_plan` is based on `confirmed_analysis`, not raw `ai_analysis`.
 - `screenplay.scenes` is not empty.
 - Each scene has a heading and at least one beat.
 - Dialogue beats include `character`.
