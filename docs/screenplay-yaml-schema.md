@@ -204,10 +204,21 @@ Each `uncertainties` item:
 | `question` | string | yes | Question requiring author confirmation. |
 | `context` | string | yes | Why the answer matters to the adaptation. |
 | `source_chapter_indexes` | list | yes | Source chapter indexes related to the question. May be empty. |
+| `options` | list | no | 2-4 predefined options the author can choose from. May be empty. |
+| `allow_custom_answer` | boolean | no | Whether the author may provide a free-form answer. Defaults to true. |
+
+Each `uncertainties.options` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable option identifier. |
+| `label` | string | yes | Short option label. |
+| `description` | string | yes | What selecting this option means. |
+| `impact` | string | yes | How this choice affects the adaptation. |
 
 Design reason:
 
-Uncertainty remains visible so AI does not silently convert ambiguous interpretations into creative facts.
+Uncertainty remains visible so AI does not silently convert ambiguous interpretations into creative facts. Options and custom answers support a one-question-at-a-time confirmation workflow.
 
 The `ai_analysis` field names exactly match the backend's `AIAnalysis.to_dict()` output. This keeps the YAML readable while avoiding a separate export mapping layer.
 
@@ -260,10 +271,19 @@ Fields:
 | `required_plot_points` | list | no | Plot points the final script must preserve. |
 | `style_preferences` | object | no | Tone, pacing, genre, or format preferences. |
 | `notes` | string | no | Free-form user guidance. |
+| `uncertainty_resolutions` | list | no | Ordered answers to AI-raised uncertainties. |
+
+Each `uncertainty_resolutions` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `uncertainty_id` | string | yes | References an uncertainty in `ai_analysis.uncertainties`. |
+| `selected_option_id` | string | no | ID of the chosen option. Exactly one of `selected_option_id` or `custom_answer` must be present. |
+| `custom_answer` | string | no | Free-form answer. Exactly one of `selected_option_id` or `custom_answer` must be present. |
 
 Design reason:
 
-`confirmed_analysis` stores the user's trusted structured story analysis. `user_confirmations` stores guidance outside that analysis, such as required plot points, style preferences, and free-form notes.
+`confirmed_analysis` stores the user's trusted structured story analysis. `user_confirmations` stores guidance outside that analysis, such as required plot points, style preferences, free-form notes, and ordered uncertainty resolutions for one-question-at-a-time confirmation.
 
 ### `adaptation_plan`
 
@@ -275,85 +295,78 @@ Fields:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `target_format` | string | yes | Planned output format. |
-| `structure` | string | yes | Planned script structure. |
-| `scene_breakdown` | list | yes | Ordered proposed scene plan. |
+| `target_format` | string | yes | Planned output format, such as `short_drama`. |
+| `structure` | string | yes | Planned script structure description. |
+| `scenes` | list | yes | Ordered proposed scene plan. |
+| `review_questions` | list | no | Plan-level review questions for the author. |
 
-Each `scene_breakdown` item:
+Each `scenes` item:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `scene_id` | string | yes | Stable scene identifier. |
-| `source_chapters` | list | yes | Source chapter indexes. |
-| `purpose` | string | yes | Dramatic purpose of the scene. |
-| `retained_events` | list | no | Source event IDs preserved in this scene. |
-| `compression_choices` | list | no | Content compressed by AI. |
-| `merge_choices` | list | no | Content merged by AI. |
-| `rewrite_choices` | list | no | Content transformed from prose to drama. |
+| `id` | string | yes | Stable scene identifier, e.g. `scene_001`. |
+| `scene_order` | integer | yes | Ordinal position in the plan, starting from 1. |
+| `title` | string | yes | Human-readable scene title. |
+| `dramatic_purpose` | string | yes | Why this scene exists dramatically. |
+| `character_ids` | list | yes | Character IDs appearing in this scene. May be empty. |
+| `source_chapter_indexes` | list | yes | Source chapter indexes adapted into this scene. May be empty. |
+| `retained_event_ids` | list | no | Source event IDs preserved in this scene. |
+| `source_candidate_scene_ids` | list | no | Candidate scene IDs this scene is based on. |
+| `compression_choices` | list | no | Structured compression decisions. |
+| `merge_choices` | list | no | Structured merge decisions. |
+| `rewrite_choices` | list | no | Structured rewrite decisions. |
+| `review_questions` | list | no | Scene-level review questions. |
+
+Each `compression_choices`, `merge_choices`, or `rewrite_choices` item (AdaptationDecision):
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable decision identifier. |
+| `description` | string | yes | What the decision does. |
+| `reason` | string | yes | Why this adaptation choice was made. |
+| `source_event_ids` | list | no | Source event IDs affected by this decision. |
+
+Each `review_questions` item (PlanReviewQuestion):
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable question identifier. |
+| `question` | string | yes | Question for the author. |
+| `context` | string | yes | Why this question matters. |
+| `related_scene_ids` | list | no | Scene IDs relevant to this question. |
 
 Design reason:
 
-Adaptation is a planning problem. The plan must be based on `confirmed_analysis`, not raw `ai_analysis`. Recording the plan lets users understand and revise the AI's creative decisions.
+Adaptation is a planning problem. The plan must be based on `confirmed_analysis`, not raw `ai_analysis`. Structured decisions (compression, merge, rewrite) make AI choices reviewable. Review questions support author-in-the-loop validation at both scene and plan level.
 
 ### `screenplay`
 
-Type: object
+Type: object or null
 
-Required: yes
+Required: yes (null if not yet generated)
 
 Fields:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `scenes` | list | yes | Ordered screenplay scenes. |
-
-Each `screenplay.scenes` item:
-
-| Field | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `id` | string | yes | Scene identifier. |
-| `heading` | object | yes | Scene heading. |
-| `source_chapters` | list | yes | Source chapter indexes. |
-| `characters` | list | no | Character names appearing in the scene. |
-| `beats` | list | yes | Action, dialogue, narration, or transition beats. |
-
-Each `heading` object:
-
-| Field | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `type` | string | yes | `INT`, `EXT`, or another supported scene type. |
-| `location` | string | yes | Scene location. |
-| `time` | string | yes | Time of day or story time. |
-
-Each `beats` item:
-
-| Field | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `type` | string | yes | `action`, `dialogue`, `narration`, `transition`, or `note`. |
-| `text` | string | yes | Beat text. |
-| `character` | string | required for dialogue | Speaking character. |
+| `scene_ids` | list | yes | Ordered scene identifiers from the adaptation plan. |
+| `revision_notes` | list | yes | AI-generated revision suggestions. May be empty. |
 
 Design reason:
 
-Scenes and beats make the script editable while preserving enough structure for future UI rendering and validation.
+The screenplay draft stores the scene sequence and revision guidance. Detailed scene content (headings, beats, dialogue) is a future extension. The current structure supports review while keeping the format open for author edits.
 
 ### `revision_notes`
 
-Type: list
+Type: list of strings
 
 Required: yes
 
-Each item:
-
-| Field | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `type` | string | yes | Note category, such as `author_review`, `continuity`, or `style`. |
-| `text` | string | yes | Note content. |
-| `related_scene_id` | string | no | Scene related to this note. |
+Each item is a plain-text revision note. Notes are generated by AI during screenplay drafting and provide author-actionable feedback such as continuity checks, pacing suggestions, or style recommendations.
 
 Design reason:
 
-AI-generated drafts should help authors continue revising. Revision notes make uncertainty and suggested improvements visible.
+AI-generated drafts should help authors continue revising. Simple string notes avoid premature structure on revision feedback, keeping the format lightweight and author-friendly.
 
 ## Complete Example
 
@@ -452,6 +465,16 @@ ai_analysis:
       question: "沈微是否提前知道密信内容？"
       context: "答案会影响沈微阻止林照的动机和后续冲突。"
       source_chapter_indexes: [1, 2]
+      options:
+        - id: "option_001"
+          label: "提前知情"
+          description: "沈微一直知道密信存在。"
+          impact: "强化隐瞒与信任冲突。"
+        - id: "option_002"
+          label: "刚刚得知"
+          description: "沈微与林照同时发现密信。"
+          impact: "强化共同调查关系。"
+      allow_custom_answer: true
 confirmed_analysis:
   characters:
     - id: "char_001"
@@ -522,86 +545,92 @@ user_confirmations:
     tone: "悬疑"
     pacing: "紧凑"
   notes: "强化林照和沈微之间的不信任。"
+  uncertainty_resolutions:
+    - uncertainty_id: "uncertainty_001"
+      selected_option_id: "option_001"
 adaptation_plan:
   target_format: "short_drama"
   structure: "three_scene_sequence"
-  scene_breakdown:
-    - scene_id: "scene_001"
-      source_chapters: [1]
-      purpose: "建立悬念"
-      retained_events: ["event_001"]
-      compression_choices: ["压缩环境描写"]
-      merge_choices: []
-      rewrite_choices: ["将心理活动改为动作和停顿"]
-    - scene_id: "scene_002"
-      source_chapters: [2]
-      purpose: "升级冲突"
-      retained_events: ["event_002"]
-      compression_choices: ["压缩追赶过程"]
-      merge_choices: []
-      rewrite_choices: ["将解释性叙述改为对峙对白"]
-    - scene_id: "scene_003"
-      source_chapters: [3]
-      purpose: "揭示线索"
-      retained_events: ["event_003"]
-      compression_choices: ["压缩查找档案过程"]
-      merge_choices: ["合并次要线索"]
-      rewrite_choices: ["用物证和沉默呈现发现"]
-screenplay:
   scenes:
     - id: "scene_001"
-      heading:
-        type: "INT"
-        location: "茶馆"
-        time: "夜"
-      source_chapters: [1]
-      characters: ["林照", "沈微"]
-      beats:
-        - type: "action"
-          text: "雨声敲打窗棂。林照坐在角落，手指反复摩挲茶杯边缘。"
-        - type: "dialogue"
-          character: "林照"
-          text: "你早就知道了，对吗？"
-        - type: "action"
-          text: "沈微没有回答，只把信推到他面前。"
+      scene_order: 1
+      title: "密信出现"
+      dramatic_purpose: "建立悬念"
+      character_ids: ["char_001"]
+      source_chapter_indexes: [1]
+      retained_event_ids: ["event_001"]
+      source_candidate_scene_ids: ["candidate_scene_001"]
+      compression_choices:
+        - id: "compression_001"
+          description: "压缩环境描写为单一场。"
+          reason: "短剧需要在有限时间内展现核心冲突。"
+          source_event_ids: ["event_001"]
+      merge_choices: []
+      rewrite_choices:
+        - id: "rewrite_001"
+          description: "将心理活动改为动作和停顿。"
+          reason: "视觉媒介需要用可见动作传达内心冲突。"
+          source_event_ids: ["event_001"]
+      review_questions:
+        - id: "review_001"
+          question: "场景 1 的密信改编是否保留了核心冲突？"
+          context: "原始章节包含关键悬念信息。"
+          related_scene_ids: ["scene_001"]
     - id: "scene_002"
-      heading:
-        type: "EXT"
-        location: "巷口"
-        time: "夜"
-      source_chapters: [2]
-      characters: ["林照", "沈微"]
-      beats:
-        - type: "action"
-          text: "林照冲出茶馆，沈微拦在巷口，雨水顺着伞沿落下。"
-        - type: "dialogue"
-          character: "沈微"
-          text: "现在公开，只会让更多人被拖进去。"
-        - type: "dialogue"
-          character: "林照"
-          text: "所以你要我继续装作什么都不知道？"
+      scene_order: 2
+      title: "巷口阻拦"
+      dramatic_purpose: "升级冲突"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [2]
+      retained_event_ids: ["event_002"]
+      source_candidate_scene_ids: ["candidate_scene_002"]
+      compression_choices:
+        - id: "compression_002"
+          description: "压缩追赶过程为对峙场景。"
+          reason: "集中冲突，避免冗长追逐。"
+          source_event_ids: ["event_002"]
+      merge_choices: []
+      rewrite_choices:
+        - id: "rewrite_002"
+          description: "将解释性叙述改为对峙对白。"
+          reason: "对白比叙述更适合短剧节奏。"
+          source_event_ids: ["event_002"]
+      review_questions: []
     - id: "scene_003"
-      heading:
-        type: "INT"
-        location: "旧档案室"
-        time: "凌晨"
-      source_chapters: [3]
-      characters: ["林照", "沈微"]
-      beats:
-        - type: "action"
-          text: "旧档案室的灯忽明忽暗。林照翻开泛黄卷宗，信纸上的编号与卷宗封条重合。"
-        - type: "dialogue"
-          character: "沈微"
-          text: "这不是失踪案，是有人把它藏成了失踪案。"
-        - type: "note"
-          text: "此处保留旧案真相的部分信息，为后续章节留悬念。"
+      scene_order: 3
+      title: "旧案线索"
+      dramatic_purpose: "揭示线索"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [3]
+      retained_event_ids: ["event_003"]
+      source_candidate_scene_ids: ["candidate_scene_003"]
+      compression_choices:
+        - id: "compression_003"
+          description: "压缩查找档案过程。"
+          reason: "过程细节不影响核心冲突。"
+          source_event_ids: ["event_003"]
+      merge_choices:
+        - id: "merge_001"
+          description: "合并次要线索到主场景。"
+          reason: "避免引入过多角色和地点。"
+          source_event_ids: ["event_003"]
+      rewrite_choices: []
+      review_questions: []
+  review_questions:
+    - id: "review_overall"
+      question: "整体结构是否符合短剧节奏要求？"
+      context: "共 3 个章节改编为场景。"
+      related_scene_ids: ["scene_001", "scene_002", "scene_003"]
+screenplay:
+  scene_ids: ["scene_001", "scene_002", "scene_003"]
+  revision_notes:
+    - "场景 1 需要导演审查节奏。"
+    - "场景 2 对话需要润色。"
+    - "scene_003 的旧案线索需要与后续章节证据保持一致。"
 revision_notes:
-  - type: "author_review"
-    text: "沈微是否提前知道密信内容会影响后续人物动机。"
-    related_scene_id: "scene_001"
-  - type: "continuity"
-    text: "scene_003 的旧案线索需要与后续章节证据保持一致。"
-    related_scene_id: "scene_003"
+  - "场景 1 需要导演审查节奏。"
+  - "场景 2 对话需要润色。"
+  - "scene_003 的旧案线索需要与后续章节证据保持一致。"
 ```
 
 ## Validation Expectations
@@ -618,15 +647,17 @@ Future implementations should validate:
 - `source_character_id`, `target_character_id`, and `character_ids` reference existing `ai_analysis.characters` IDs.
 - `source_chapter_indexes` reference existing `source.chapters` indexes.
 - Candidate scenes are suggestions and do not need to match or order final screenplay scenes.
-- Uncertainty questions remain available for user confirmation.
+- Uncertainty questions include `options` (2-4 items or empty) and `allow_custom_answer`.
+- Uncertainty option IDs are unique within each uncertainty.
 - `confirmed_analysis` follows the same seven-list and item-field rules as `ai_analysis`.
 - Confirmed analysis item IDs are unique within their category.
 - Confirmed `source_character_id`, `target_character_id`, and `character_ids` reference `confirmed_analysis.characters` IDs.
 - Confirmed `source_chapter_indexes` reference existing `source.chapters` indexes.
 - `confirmed_analysis` may contain seven empty lists.
+- `user_confirmations.uncertainty_resolutions` entries reference existing `ai_analysis.uncertainties` IDs.
+- Each resolution provides exactly one of `selected_option_id` or `custom_answer`.
 - `adaptation_plan` is based on `confirmed_analysis`, not raw `ai_analysis`.
-- `screenplay.scenes` is not empty.
-- Each scene has a heading and at least one beat.
-- Dialogue beats include `character`.
-- Scene source chapter references point to existing source chapters.
-- `adaptation_plan.scene_breakdown` references align with `screenplay.scenes`.
+- `adaptation_plan.scenes` scene IDs and `scene_order` values are unique.
+- `adaptation_plan.scenes` reference existing confirmed character IDs and source chapter indexes.
+- `screenplay.scene_ids` reference `adaptation_plan.scenes` IDs. May be empty if not yet generated.
+- `revision_notes` contains plain-text strings. May be empty.
