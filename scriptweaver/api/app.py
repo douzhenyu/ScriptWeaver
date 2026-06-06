@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from scriptweaver.ai.provider import (
     AIAnalysisProvider,
     AdaptationPlanProvider,
+    ScreenplayProvider,
 )
 from scriptweaver.domain.analysis_validation import AnalysisValidationError
 from scriptweaver.domain.models import (
@@ -181,6 +182,7 @@ class ConfirmPlanRequest(BaseModel):
 def create_app(
     ai_provider: AIAnalysisProvider,
     plan_provider: AdaptationPlanProvider | None = None,
+    screenplay_provider: ScreenplayProvider | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="ScriptWeaver API",
@@ -191,7 +193,11 @@ def create_app(
         version="0.1.0",
     )
 
-    service = AdaptationService(ai_provider, plan_provider=plan_provider)
+    service = AdaptationService(
+        ai_provider,
+        plan_provider=plan_provider,
+        screenplay_provider=screenplay_provider,
+    )
     jobs: dict[str, Any] = {}
 
     def _get_job(job_id: str):
@@ -348,3 +354,18 @@ def create_app(
         return _job_to_response(job)
 
     return app
+
+
+# ── Default application instance ──────────────────────────────────
+
+from scriptweaver.ai.mock_provider import (  # noqa: E402
+    MockAIAnalysisProvider,
+    MockPlanProvider,
+    MockScreenplayProvider,
+)
+
+app = create_app(
+    MockAIAnalysisProvider(),
+    plan_provider=MockPlanProvider(),
+    screenplay_provider=MockScreenplayProvider(),
+)
