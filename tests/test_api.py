@@ -290,6 +290,122 @@ def test_get_job_returns_404_for_unknown(client):
     assert response.status_code == 404
 
 
+# ── Nested field validation: must return 400, not 500 ────────────
+
+
+def test_confirm_analysis_missing_character_name(client):
+    """Missing required Character fields must return 400, not 500."""
+    _bootstrap_to_analysis_generated(client)
+
+    response = client.post(
+        "/jobs/job-001/confirm-analysis",
+        json={
+            "characters": [{"id": "c1"}],  # missing name, role, etc.
+            "relationships": [],
+            "key_events": [],
+            "conflicts": [],
+            "themes": [],
+            "candidate_scenes": [],
+            "uncertainties": [],
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_confirm_analysis_missing_uncertainty_option_label(client):
+    """Missing UncertaintyOption.label must return 400, not 500."""
+    _bootstrap_to_analysis_generated(client)
+
+    response = client.post(
+        "/jobs/job-001/confirm-analysis",
+        json={
+            "characters": [],
+            "relationships": [],
+            "key_events": [],
+            "conflicts": [],
+            "themes": [],
+            "candidate_scenes": [],
+            "uncertainties": [
+                {
+                    "id": "u1",
+                    "question": "?",
+                    "context": "ctx",
+                    "options": [{"id": "o1"}],  # missing label, description, impact
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_confirm_plan_missing_scene_order(client):
+    """Missing ScenePlan.scene_order must return 400, not 500."""
+    _bootstrap_to_analysis_confirmed(client)
+    client.post("/jobs/job-001/generate-plan")
+
+    response = client.post(
+        "/jobs/job-001/confirm-plan",
+        json={
+            "target_format": "short",
+            "structure": "x",
+            "scenes": [{"id": "s1"}],  # missing scene_order, title, dramatic_purpose
+            "review_questions": [],
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_confirm_plan_missing_decision_id(client):
+    """Missing AdaptationDecision.id must return 400, not 500."""
+    _bootstrap_to_analysis_confirmed(client)
+    client.post("/jobs/job-001/generate-plan")
+
+    response = client.post(
+        "/jobs/job-001/confirm-plan",
+        json={
+            "target_format": "short",
+            "structure": "x",
+            "scenes": [
+                {
+                    "id": "s1",
+                    "scene_order": 1,
+                    "title": "Scene 1",
+                    "dramatic_purpose": "purpose",
+                    "compression_choices": [
+                        {"description": "desc", "reason": "reason"}  # missing id
+                    ],
+                }
+            ],
+            "review_questions": [],
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_confirm_analysis_typeerror_converted_to_valueerror():
+    """to_analysis() must raise ValueError, not TypeError, on bad input."""
+    from scriptweaver.api.app import ConfirmAnalysisRequest
+
+    req = ConfirmAnalysisRequest(
+        characters=[{"id": "c1"}],
+        relationships=[],
+        key_events=[],
+        conflicts=[],
+        themes=[],
+        candidate_scenes=[],
+        uncertainties=[],
+    )
+
+    import pytest
+
+    with pytest.raises(ValueError, match="Character"):
+        req.to_analysis()
+
+
 # ── Error recovery: job not mutated on error ─────────────────────
 
 
