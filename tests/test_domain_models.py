@@ -713,6 +713,30 @@ def test_uncertainty_option_and_resolution_defaults_are_independent():
     assert second_confirmations.uncertainty_resolutions == []
 
 
+def test_uncertainty_preserves_existing_positional_argument_order():
+    uncertainty = Uncertainty(
+        "uncertainty_001",
+        "沈微是否提前知道密信？",
+        "答案影响人物动机。",
+        [1, 2],
+    )
+
+    assert uncertainty.source_chapter_indexes == [1, 2]
+    assert uncertainty.options == []
+    assert uncertainty.allow_custom_answer is True
+
+
+def test_user_confirmations_preserves_existing_positional_argument_order():
+    confirmations = UserConfirmations(
+        ["char_001"],
+        ["密信必须保留"],
+        "强化不信任。",
+    )
+
+    assert confirmations.notes == "强化不信任。"
+    assert confirmations.uncertainty_resolutions == []
+
+
 def test_uncertainty_models_are_public_domain_exports():
     from scriptweaver.domain import (
         UncertaintyOption as ExportedUncertaintyOption,

@@ -105,9 +105,9 @@ class Uncertainty:
     id: str
     question: str
     context: str
+    source_chapter_indexes: list[int] = field(default_factory=list)
     options: list[UncertaintyOption] = field(default_factory=list)
     allow_custom_answer: bool = True
-    source_chapter_indexes: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -151,10 +151,10 @@ class UncertaintyResolution:
 class UserConfirmations:
     accepted_character_ids: list[str] = field(default_factory=list)
     required_plot_points: list[str] = field(default_factory=list)
+    notes: str = ""
     uncertainty_resolutions: list[UncertaintyResolution] = field(
         default_factory=list
     )
-    notes: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
