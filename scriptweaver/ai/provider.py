@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from scriptweaver.domain.models import AIAnalysis, Chapter
+from scriptweaver.domain.models import (
+    AIAnalysis,
+    AdaptationPlan,
+    Chapter,
+)
 
 
 class AIProviderInputError(ValueError):
@@ -12,3 +16,12 @@ class AIProviderInputError(ValueError):
 class AIAnalysisProvider(Protocol):
     def analyze_chapters(self, chapters: list[Chapter]) -> AIAnalysis:
         """Analyze source chapters and return AI story analysis."""
+
+
+class AdaptationPlanProvider(Protocol):
+    def generate_plan(
+        self,
+        confirmed_analysis: AIAnalysis,
+        chapters: list[Chapter],
+    ) -> AdaptationPlan:
+        """Generate adaptation plan from confirmed analysis and chapters."""
