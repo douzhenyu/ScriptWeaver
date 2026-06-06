@@ -1,7 +1,13 @@
 import pytest
 
 from scriptweaver.ai.mock_provider import MockAIAnalysisProvider
-from scriptweaver.domain.models import AIAnalysis, Chapter, Character
+from scriptweaver.domain.models import (
+    AIAnalysis,
+    Chapter,
+    Character,
+    Conflict,
+    KeyEvent,
+)
 from scriptweaver.domain.workflow import AdaptationState, WorkflowTransitionError
 from scriptweaver.services.adaptation_service import (
     AdaptationService,
@@ -87,7 +93,17 @@ def test_attach_chapters_rejects_empty_chapter_content():
 class RecordingProvider:
     def __init__(self) -> None:
         self.received_chapters: list[Chapter] | None = None
-        self.analysis = AIAnalysis(conflicts=["外部目标与内部动机冲突"])
+        self.analysis = AIAnalysis(
+            conflicts=[
+                Conflict(
+                    id="conflict_001",
+                    description="外部目标与内部动机冲突",
+                    stakes="错误选择会破坏关键关系。",
+                    character_ids=[],
+                    source_chapter_indexes=[1],
+                )
+            ]
+        )
 
     def analyze_chapters(self, chapters: list[Chapter]) -> AIAnalysis:
         self.received_chapters = chapters
@@ -97,9 +113,24 @@ class RecordingProvider:
 class MutatingProvider:
     def __init__(self) -> None:
         self.analysis = AIAnalysis(
-            characters=[Character(id="char-001", name="林照", role="protagonist")],
-            conflicts=["林照必须决定是否公开密信"],
-            key_events=["林照收到密信"],
+            characters=[
+                Character(
+                    id="char-001",
+                    name="林照",
+                    role="protagonist",
+                    description="调查旧案的人。",
+                    goal="查明真相。",
+                    motivation="保护家人。",
+                )
+            ],
+            key_events=[
+                KeyEvent(
+                    id="event-001",
+                    summary="林照收到密信。",
+                    character_ids=["char-001"],
+                    source_chapter_indexes=[1],
+                )
+            ],
         )
 
     def analyze_chapters(self, chapters: list[Chapter]) -> AIAnalysis:
@@ -137,21 +168,37 @@ def test_generate_analysis_isolates_chapters_from_provider_mutation():
     assert updated_job.chapters == expected_chapters
 
 
-def test_generate_analysis_isolates_stored_analysis_from_provider_mutation():
+def test_generate_analysis_deep_copies_provider_analysis():
     provider = MutatingProvider()
     service = AdaptationService(provider)
     chaptered_job = service.attach_chapters(service.create_job("job-001"), make_chapters())
 
     updated_job = service.generate_analysis(chaptered_job)
+    provider.analysis.key_events[0].character_ids.clear()
+    provider.analysis.key_events[0].source_chapter_indexes.clear()
     provider.analysis.characters.clear()
-    provider.analysis.conflicts.clear()
     provider.analysis.key_events.clear()
 
     assert updated_job.ai_analysis is not provider.analysis
     assert updated_job.ai_analysis == AIAnalysis(
-        characters=[Character(id="char-001", name="林照", role="protagonist")],
-        conflicts=["林照必须决定是否公开密信"],
-        key_events=["林照收到密信"],
+        characters=[
+            Character(
+                id="char-001",
+                name="林照",
+                role="protagonist",
+                description="调查旧案的人。",
+                goal="查明真相。",
+                motivation="保护家人。",
+            )
+        ],
+        key_events=[
+            KeyEvent(
+                id="event-001",
+                summary="林照收到密信。",
+                character_ids=["char-001"],
+                source_chapter_indexes=[1],
+            )
+        ],
     )
 
 

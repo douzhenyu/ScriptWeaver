@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 
 from scriptweaver.ai.provider import AIAnalysisProvider
-from scriptweaver.domain.models import AIAnalysis, AdaptationJob, Chapter
+from scriptweaver.domain.models import AdaptationJob, Chapter
 from scriptweaver.domain.workflow import AdaptationState, ensure_transition_allowed
 
 
@@ -42,11 +43,7 @@ class AdaptationService:
         ensure_transition_allowed(job.state, AdaptationState.ANALYSIS_GENERATED)
 
         provider_analysis = self._ai_provider.analyze_chapters(list(job.chapters))
-        analysis = AIAnalysis(
-            characters=list(provider_analysis.characters),
-            conflicts=list(provider_analysis.conflicts),
-            key_events=list(provider_analysis.key_events),
-        )
+        analysis = deepcopy(provider_analysis)
 
         return replace(
             job,
