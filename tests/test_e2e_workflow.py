@@ -82,10 +82,7 @@ def test_full_workflow_from_create_to_export():
     assert resolutions[0].selected_option_id == "option_001"
 
     # ── Stage 5: Confirm analysis ────────────────────────────
-    job = service.confirm_analysis(
-        job,
-        job.ai_analysis,  # accept AI analysis as-is
-    )
+    job = service.confirm_analysis(job)
     assert job.state == AdaptationState.ANALYSIS_CONFIRMED
     assert job.confirmed_analysis is not None
 
@@ -177,7 +174,7 @@ def test_workflow_preserves_complete_history():
     job = service.attach_chapters(job, chapters)
     job = service.generate_analysis(job)
     raw_analysis = job.ai_analysis
-    job = service.confirm_analysis(job, raw_analysis)
+    job = service.confirm_analysis(job)
     job = service.generate_plan(job)
     job = service.confirm_plan(job, job.adaptation_plan)
     job = service.generate_screenplay(job)
@@ -228,8 +225,8 @@ def test_workflow_with_minimal_input():
         [Chapter(index=1, title="单章", content="最短内容。")],
     )
     job = service.generate_analysis(job)
-    # Confirm with empty analysis
-    job = service.confirm_analysis(job, AIAnalysis())
+    # Confirm analysis derived from ai_analysis
+    job = service.confirm_analysis(job)
     job = service.generate_plan(job)
 
     assert job.state == AdaptationState.PLAN_GENERATED

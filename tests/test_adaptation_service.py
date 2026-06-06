@@ -41,29 +41,6 @@ def make_chapters() -> list[Chapter]:
     ]
 
 
-def make_confirmed_analysis() -> AIAnalysis:
-    return AIAnalysis(
-        characters=[
-            Character(
-                id="char-confirmed",
-                name="林照",
-                role="protagonist",
-                description="用户确认后的主角描述。",
-                goal="查明真相。",
-                motivation="保护家人。",
-            )
-        ],
-        key_events=[
-            KeyEvent(
-                id="event-confirmed",
-                summary="用户确认密信必须保留。",
-                character_ids=["char-confirmed"],
-                source_chapter_indexes=[1],
-            )
-        ],
-    )
-
-
 def make_analysis_generated_job(service: AdaptationService):
     job = service.create_job("job-001")
     job = service.attach_chapters(job, make_chapters())
@@ -373,24 +350,30 @@ def test_confirm_analysis_validates_and_advances_state():
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_analysis_generated_job(service)
     raw_analysis = job.ai_analysis
-    confirmed_analysis = make_confirmed_analysis()
 
-    updated_job = service.confirm_analysis(job, confirmed_analysis)
+    updated_job = service.confirm_analysis(job)
 
     assert updated_job is not job
     assert updated_job.state == AdaptationState.ANALYSIS_CONFIRMED
     assert updated_job.ai_analysis is raw_analysis
-    assert updated_job.confirmed_analysis == confirmed_analysis
-    assert updated_job.confirmed_analysis is not confirmed_analysis
+    assert updated_job.confirmed_analysis is not None
+    assert updated_job.confirmed_analysis is not raw_analysis
+    # confirmed_analysis derives from ai_analysis
+    assert len(updated_job.confirmed_analysis.characters) == len(
+        raw_analysis.characters
+    )
     assert job.state == AdaptationState.ANALYSIS_GENERATED
     assert job.confirmed_analysis is None
 
 
 def test_confirm_analysis_accepts_empty_analysis():
+    """When ai_analysis is empty, confirmed_analysis is also empty."""
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_analysis_generated_job(service)
+    # Replace ai_analysis with empty analysis
+    job = replace(job, ai_analysis=AIAnalysis())
 
-    updated_job = service.confirm_analysis(job, AIAnalysis())
+    updated_job = service.confirm_analysis(job)
 
     assert updated_job.state == AdaptationState.ANALYSIS_CONFIRMED
     assert updated_job.confirmed_analysis == AIAnalysis()
@@ -399,18 +382,16 @@ def test_confirm_analysis_accepts_empty_analysis():
 def test_confirm_analysis_rejects_invalid_analysis():
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_analysis_generated_job(service)
-    confirmed_analysis = make_confirmed_analysis()
-    character = confirmed_analysis.characters[0]
-    invalid_analysis = replace(
-        confirmed_analysis,
-        characters=[character, character],
-    )
+    # Corrupt ai_analysis with duplicate characters
+    char = job.ai_analysis.characters[0]
+    corrupted = replace(job.ai_analysis, characters=[char, char])
+    job = replace(job, ai_analysis=corrupted)
 
     with pytest.raises(
         AnalysisValidationError,
-        match="Duplicate characters id: char-confirmed",
+        match="Duplicate characters id",
     ):
-        service.confirm_analysis(job, invalid_analysis)
+        service.confirm_analysis(job)
 
     assert job.state == AdaptationState.ANALYSIS_GENERATED
     assert job.confirmed_analysis is None
@@ -419,25 +400,98 @@ def test_confirm_analysis_rejects_invalid_analysis():
 def test_confirm_analysis_rejects_wrong_state_before_analysis_validation():
     service = AdaptationService(MockAIAnalysisProvider())
     job = service.create_job("job-001")
-    character = make_confirmed_analysis().characters[0]
-    invalid_analysis = AIAnalysis(characters=[character, character])
+    # Give it an ai_analysis but wrong state
+    job = replace(job, ai_analysis=AIAnalysis())
 
     with pytest.raises(WorkflowTransitionError, match="Cannot transition"):
-        service.confirm_analysis(job, invalid_analysis)
+        service.confirm_analysis(job)
 
 
 def test_confirm_analysis_deep_copies_submitted_snapshot():
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_analysis_generated_job(service)
-    confirmed_analysis = make_confirmed_analysis()
 
-    updated_job = service.confirm_analysis(job, confirmed_analysis)
-    confirmed_analysis.key_events[0].character_ids.clear()
-    confirmed_analysis.key_events[0].source_chapter_indexes.clear()
-    confirmed_analysis.characters.clear()
-    confirmed_analysis.key_events.clear()
+    updated_job = service.confirm_analysis(job)
 
-    assert updated_job.confirmed_analysis == make_confirmed_analysis()
+    # Mutating ai_analysis after confirm must not affect confirmed_analysis
+    job.ai_analysis.characters.clear()
+    job.ai_analysis.key_events.clear()
+    assert len(updated_job.confirmed_analysis.characters) > 0
+
+
+def test_confirm_analysis_derives_from_ai_analysis():
+    """confirmed_analysis must be derived from ai_analysis, not passed in."""
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+
+    updated_job = service.confirm_analysis(job)
+
+    # confirmed_analysis should contain the same characters as ai_analysis
+    assert updated_job.confirmed_analysis is not None
+    assert len(updated_job.confirmed_analysis.characters) == len(
+        job.ai_analysis.characters
+    )
+    assert (
+        updated_job.confirmed_analysis.characters[0].id
+        == job.ai_analysis.characters[0].id
+    )
+
+
+def test_confirm_analysis_filters_by_accepted_characters():
+    """accepted_character_ids in user_confirmations must filter characters."""
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    # Set up user_confirmations with accepted_character_ids
+    job = replace(
+        job,
+        user_confirmations=UserConfirmations(
+            accepted_character_ids=["char_001"],
+        ),
+    )
+
+    updated_job = service.confirm_analysis(job)
+
+    assert len(updated_job.confirmed_analysis.characters) == 1
+    assert updated_job.confirmed_analysis.characters[0].id == "char_001"
+
+
+def test_confirm_analysis_preserves_uncertainty_resolutions():
+    """Uncertainty resolutions must be preserved after confirmation."""
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="option_001",
+    )
+    job = replace(
+        job,
+        user_confirmations=UserConfirmations(
+            uncertainty_resolutions=[resolution],
+        ),
+    )
+
+    updated_job = service.confirm_analysis(job)
+
+    assert updated_job.user_confirmations is not None
+    assert len(updated_job.user_confirmations.uncertainty_resolutions) == 1
+    assert (
+        updated_job.user_confirmations.uncertainty_resolutions[0].selected_option_id
+        == "option_001"
+    )
+
+
+def test_confirm_analysis_rejects_without_ai_analysis():
+    """confirm_analysis must raise when ai_analysis is None."""
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = service.attach_chapters(
+        service.create_job("job-001"),
+        make_chapters(),
+    )
+    # Manually advance to ANALYSIS_GENERATED but with ai_analysis=None
+    job = replace(job, state=AdaptationState.ANALYSIS_GENERATED)
+
+    with pytest.raises(AdaptationServiceError, match="No AI analysis"):
+        service.confirm_analysis(job)
 
 
 # ── get_next_unanswered_uncertainty ──────────────────────────────
@@ -773,7 +827,7 @@ def make_analysis_confirmed_job(service: AdaptationService):
     chapters = make_chapters()
     job = service.attach_chapters(job, chapters)
     job = service.generate_analysis(job)
-    return service.confirm_analysis(job, job.ai_analysis)
+    return service.confirm_analysis(job)
 
 
 class RecordingPlanProvider:
@@ -929,7 +983,7 @@ def make_plan_generated_job(service: AdaptationService):
     job = service.attach_chapters(job, make_chapters())
     job = service.generate_analysis(job)
     analysis = job.ai_analysis
-    job = service.confirm_analysis(job, analysis)
+    job = service.confirm_analysis(job)
     # Manually set a plan to simulate PLAN_GENERATED state
     plan = AdaptationPlan(
         target_format="short_drama",
@@ -970,7 +1024,7 @@ def make_plan_confirmed_job(service: AdaptationService):
     job = service.attach_chapters(job, make_chapters())
     job = service.generate_analysis(job)
     analysis = job.ai_analysis
-    job = service.confirm_analysis(job, analysis)
+    job = service.confirm_analysis(job)
     plan = AdaptationPlan(
         target_format="short_drama",
         structure="3 scenes, linear progression",

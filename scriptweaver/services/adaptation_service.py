@@ -78,20 +78,73 @@ class AdaptationService:
             ai_analysis=analysis,
         )
 
-    def confirm_analysis(
-        self,
-        job: AdaptationJob,
-        confirmed_analysis: AIAnalysis,
-    ) -> AdaptationJob:
+    def confirm_analysis(self, job: AdaptationJob) -> AdaptationJob:
+        if job.ai_analysis is None:
+            raise AdaptationServiceError("No AI analysis to confirm")
+
         ensure_transition_allowed(job.state, AdaptationState.ANALYSIS_CONFIRMED)
 
+        confirmed = deepcopy(job.ai_analysis)
+
+        if job.user_confirmations is not None:
+            accepted_ids = job.user_confirmations.accepted_character_ids
+            if accepted_ids:
+                accepted_set = set(accepted_ids)
+
+                def _filter_character_ids(
+                    ids: list[str],
+                ) -> list[str]:
+                    return [cid for cid in ids if cid in accepted_set]
+
+                confirmed = replace(
+                    confirmed,
+                    characters=[
+                        c
+                        for c in confirmed.characters
+                        if c.id in accepted_set
+                    ],
+                    relationships=[
+                        r
+                        for r in confirmed.relationships
+                        if r.source_character_id in accepted_set
+                        and r.target_character_id in accepted_set
+                    ],
+                    key_events=[
+                        replace(
+                            e,
+                            character_ids=_filter_character_ids(
+                                e.character_ids
+                            ),
+                        )
+                        for e in confirmed.key_events
+                    ],
+                    conflicts=[
+                        replace(
+                            c,
+                            character_ids=_filter_character_ids(
+                                c.character_ids
+                            ),
+                        )
+                        for c in confirmed.conflicts
+                    ],
+                    candidate_scenes=[
+                        replace(
+                            s,
+                            character_ids=_filter_character_ids(
+                                s.character_ids
+                            ),
+                        )
+                        for s in confirmed.candidate_scenes
+                    ],
+                )
+
         chapter_indexes = {chapter.index for chapter in job.chapters}
-        validate_analysis(confirmed_analysis, chapter_indexes)
+        validate_analysis(confirmed, chapter_indexes)
 
         return replace(
             job,
             state=AdaptationState.ANALYSIS_CONFIRMED,
-            confirmed_analysis=deepcopy(confirmed_analysis),
+            confirmed_analysis=confirmed,
         )
 
     def get_next_unanswered_uncertainty(
