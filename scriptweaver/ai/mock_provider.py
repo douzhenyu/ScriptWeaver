@@ -167,7 +167,7 @@ class MockPlanProvider:
                             if e.id == eid
                         )
                     ]
-                    or [event_ids[i - 1]]
+                    or [event_ids[(i - 1) % len(event_ids)]]
                     if event_ids
                     else [],
                     source_candidate_scene_ids=[
@@ -182,7 +182,7 @@ class MockPlanProvider:
                             ),
                             reason="短剧需要在有限时间内展现核心冲突。",
                             source_event_ids=(
-                                [event_ids[i - 1]]
+                                [event_ids[(i - 1) % len(event_ids)]]
                                 if event_ids
                                 else []
                             ),
