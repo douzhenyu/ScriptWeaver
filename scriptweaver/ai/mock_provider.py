@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 from scriptweaver.ai.provider import AIProviderInputError
-from scriptweaver.domain.models import AIAnalysis, Chapter, Character
+from scriptweaver.domain.models import (
+    AIAnalysis,
+    CandidateScene,
+    Chapter,
+    Character,
+    CharacterRelationship,
+    Conflict,
+    KeyEvent,
+    Theme,
+    Uncertainty,
+)
 
 
 class MockAIAnalysisProvider:
@@ -17,17 +27,86 @@ class MockAIAnalysisProvider:
             if not chapter.content.strip():
                 raise AIProviderInputError(f"{chapter.title} is empty")
 
+        chapter_indexes = [chapter.index for chapter in chapters]
+        character_ids = ["char_001", "char_002"]
+
         return AIAnalysis(
             characters=[
-                Character(id="char_001", name="主角", role="protagonist"),
-                Character(id="char_002", name="关键关系人", role="supporting"),
+                Character(
+                    id="char_001",
+                    name="主角",
+                    role="protagonist",
+                    description="推动调查并承担主要风险的人物。",
+                    goal="理解所有章节中的关键事件。",
+                    motivation="找到事件背后的真相。",
+                ),
+                Character(
+                    id="char_002",
+                    name="关键关系人",
+                    role="supporting",
+                    description="与主角合作但保留关键信息的人物。",
+                    goal="影响主角对真相的选择。",
+                    motivation="避免关键事件造成更大代价。",
+                ),
             ],
-            conflicts=[
-                f"主角需要理解《{chapters[0].title}》中的关键事件，"
-                "但后续章节不断提高代价。"
+            relationships=[
+                CharacterRelationship(
+                    id="relationship_001",
+                    source_character_id="char_001",
+                    target_character_id="char_002",
+                    description="双方共同调查，但对是否公开真相存在分歧。",
+                    source_chapter_indexes=list(chapter_indexes),
+                )
             ],
             key_events=[
-                f"{chapter.title}: {chapter.content}"
-                for chapter in chapters
+                KeyEvent(
+                    id=f"event_{position:03d}",
+                    summary=f"{chapter.title}: {chapter.content}",
+                    character_ids=list(character_ids),
+                    source_chapter_indexes=[chapter.index],
+                )
+                for position, chapter in enumerate(chapters, start=1)
+            ],
+            conflicts=[
+                Conflict(
+                    id="conflict_001",
+                    description=(
+                        f"主角需要理解《{chapters[0].title}》中的关键事件，"
+                        "但后续章节不断提高代价。"
+                    ),
+                    stakes="如果主角无法理解真相，关键关系和后续选择都会受到影响。",
+                    character_ids=list(character_ids),
+                    source_chapter_indexes=list(chapter_indexes),
+                )
+            ],
+            themes=[
+                Theme(
+                    id="theme_001",
+                    statement="理解真相需要面对不断提高的代价。",
+                    source_chapter_indexes=list(chapter_indexes),
+                )
+            ],
+            candidate_scenes=[
+                CandidateScene(
+                    id=f"candidate_scene_{position:03d}",
+                    title=chapter.title,
+                    summary=chapter.content,
+                    dramatic_purpose=(
+                        f"将{chapter.title}的关键事件转化为可见的戏剧行动。"
+                    ),
+                    location="待作者确认",
+                    time_hint="待作者确认",
+                    character_ids=list(character_ids),
+                    source_chapter_indexes=[chapter.index],
+                )
+                for position, chapter in enumerate(chapters, start=1)
+            ],
+            uncertainties=[
+                Uncertainty(
+                    id="uncertainty_001",
+                    question="关键关系人是否提前知道主角发现的线索？",
+                    context="人物动机将影响后续场景冲突。",
+                    source_chapter_indexes=list(chapter_indexes),
+                )
             ],
         )
