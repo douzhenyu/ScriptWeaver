@@ -11,6 +11,7 @@ from scriptweaver.domain.models import (
     KeyEvent,
     Theme,
     Uncertainty,
+    UncertaintyOption,
 )
 
 
@@ -106,6 +107,21 @@ class MockAIAnalysisProvider:
                     id="uncertainty_001",
                     question="关键关系人是否提前知道主角发现的线索？",
                     context="人物动机将影响后续场景冲突。",
+                    options=[
+                        UncertaintyOption(
+                            id="option_001",
+                            label="提前知情",
+                            description="关键关系人一直知道主角发现的线索。",
+                            impact="强化隐瞒与信任冲突。",
+                        ),
+                        UncertaintyOption(
+                            id="option_002",
+                            label="刚刚得知",
+                            description="关键关系人与主角同时发现线索。",
+                            impact="强化共同调查关系。",
+                        ),
+                    ],
+                    allow_custom_answer=True,
                     source_chapter_indexes=list(chapter_indexes),
                 )
             ],

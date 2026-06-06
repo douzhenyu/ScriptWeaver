@@ -12,6 +12,7 @@ from scriptweaver.domain.models import (
     KeyEvent,
     Theme,
     Uncertainty,
+    UncertaintyOption,
 )
 
 
@@ -129,6 +130,21 @@ def test_mock_provider_returns_deterministic_ai_analysis():
             id="uncertainty_001",
             question="关键关系人是否提前知道主角发现的线索？",
             context="人物动机将影响后续场景冲突。",
+            options=[
+                UncertaintyOption(
+                    id="option_001",
+                    label="提前知情",
+                    description="关键关系人一直知道主角发现的线索。",
+                    impact="强化隐瞒与信任冲突。",
+                ),
+                UncertaintyOption(
+                    id="option_002",
+                    label="刚刚得知",
+                    description="关键关系人与主角同时发现线索。",
+                    impact="强化共同调查关系。",
+                ),
+            ],
+            allow_custom_answer=True,
             source_chapter_indexes=[1, 2, 3],
         )
     ]
@@ -227,3 +243,13 @@ def test_mock_provider_analyzes_all_supplied_chapters():
             *analysis.uncertainties,
         ]
     )
+
+
+def test_mock_provider_uncertainties_are_answerable():
+    from scriptweaver.domain.uncertainty_validation import (
+        validate_uncertainties,
+    )
+
+    analysis = MockAIAnalysisProvider().analyze_chapters(make_chapters())
+
+    validate_uncertainties(analysis.uncertainties)
