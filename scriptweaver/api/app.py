@@ -13,7 +13,6 @@ from scriptweaver.ai.provider import (
 )
 from scriptweaver.domain.analysis_validation import AnalysisValidationError
 from scriptweaver.domain.models import (
-    AIAnalysis,
     Chapter,
     UncertaintyResolution,
 )
@@ -43,65 +42,6 @@ class ChapterInput(BaseModel):
 
 class AttachChaptersRequest(BaseModel):
     chapters: list[ChapterInput]
-
-
-class ConfirmAnalysisRequest(BaseModel):
-    characters: list[dict[str, Any]] = []
-    relationships: list[dict[str, Any]] = []
-    key_events: list[dict[str, Any]] = []
-    conflicts: list[dict[str, Any]] = []
-    themes: list[dict[str, Any]] = []
-    candidate_scenes: list[dict[str, Any]] = []
-    uncertainties: list[dict[str, Any]] = []
-
-    def to_analysis(self) -> AIAnalysis:
-        from scriptweaver.domain.models import (
-            CandidateScene,
-            Character,
-            CharacterRelationship,
-            Conflict,
-            KeyEvent,
-            Theme,
-            Uncertainty,
-            UncertaintyOption,
-        )
-
-        def _parse_uncertainty(raw: dict[str, Any]) -> Uncertainty:
-            options = [
-                UncertaintyOption(**opt)
-                for opt in raw.get("options", [])
-            ]
-            return Uncertainty(
-                id=raw["id"],
-                question=raw["question"],
-                context=raw["context"],
-                source_chapter_indexes=raw.get(
-                    "source_chapter_indexes", []
-                ),
-                options=options,
-                allow_custom_answer=raw.get(
-                    "allow_custom_answer", True
-                ),
-            )
-
-        try:
-            return AIAnalysis(
-                characters=[Character(**c) for c in self.characters],
-                relationships=[
-                    CharacterRelationship(**r) for r in self.relationships
-                ],
-                key_events=[KeyEvent(**k) for k in self.key_events],
-                conflicts=[Conflict(**c) for c in self.conflicts],
-                themes=[Theme(**t) for t in self.themes],
-                candidate_scenes=[
-                    CandidateScene(**s) for s in self.candidate_scenes
-                ],
-                uncertainties=[
-                    _parse_uncertainty(u) for u in self.uncertainties
-                ],
-            )
-        except (TypeError, KeyError) as error:
-            raise ValueError(str(error)) from error
 
 
 class UncertaintyAnswerRequest(BaseModel):
@@ -283,11 +223,10 @@ def create_app(
     # ── Confirm analysis ────────────────────────────────────
 
     @app.post("/jobs/{job_id}/confirm-analysis")
-    def confirm_analysis(job_id: str, req: ConfirmAnalysisRequest):
+    def confirm_analysis(job_id: str):
         job = _get_job(job_id)
         try:
-            analysis = req.to_analysis()
-            job = service.confirm_analysis(job, analysis)
+            job = service.confirm_analysis(job)
         except WorkflowTransitionError as error:
             _handle_error(409, str(error))
         except (AnalysisValidationError, ValueError) as error:

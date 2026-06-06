@@ -47,8 +47,7 @@ def make_full_job():
     job = service.create_job("job-001")
     job = service.attach_chapters(job, make_chapters())
     job = service.generate_analysis(job)
-    # Confirm the raw analysis as-is
-    job = service.confirm_analysis(job, job.ai_analysis)
+    job = service.confirm_analysis(job)
     job = service.generate_plan(job)
     job = service.confirm_plan(job, job.adaptation_plan)
     # Manually add screenplay_draft in SCREENPLAY_GENERATED state
