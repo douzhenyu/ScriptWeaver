@@ -6,10 +6,13 @@ from scriptweaver.domain.analysis_validation import (
 )
 from scriptweaver.domain.models import (
     AIAnalysis,
+    AdaptationDecision,
     AdaptationJob,
     AdaptationPlan,
     Chapter,
     Character,
+    PlanReviewQuestion,
+    ScenePlan,
     ScreenplayDraft,
     UserConfirmations,
 )
@@ -21,12 +24,15 @@ from scriptweaver.domain.workflow import (
 
 __all__ = [
     "AIAnalysis",
+    "AdaptationDecision",
     "AdaptationJob",
     "AdaptationPlan",
     "AdaptationState",
     "AnalysisValidationError",
     "Chapter",
     "Character",
+    "PlanReviewQuestion",
+    "ScenePlan",
     "ScreenplayDraft",
     "UserConfirmations",
     "WorkflowTransitionError",

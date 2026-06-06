@@ -581,3 +581,15 @@ def test_structured_adaptation_plan_defaults_are_independent():
     assert second_plan.review_questions == []
     assert not hasattr(first_plan, "scene_ids")
     assert "scene_ids" not in first_plan.to_dict()
+
+
+def test_structured_adaptation_plan_models_are_public_domain_exports():
+    from scriptweaver.domain import (
+        AdaptationDecision as ExportedAdaptationDecision,
+        PlanReviewQuestion as ExportedPlanReviewQuestion,
+        ScenePlan as ExportedScenePlan,
+    )
+
+    assert ExportedAdaptationDecision is AdaptationDecision
+    assert ExportedPlanReviewQuestion is PlanReviewQuestion
+    assert ExportedScenePlan is ScenePlan
