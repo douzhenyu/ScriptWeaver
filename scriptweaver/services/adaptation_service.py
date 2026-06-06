@@ -69,6 +69,9 @@ class AdaptationService:
         provider_analysis = self._ai_provider.analyze_chapters(list(job.chapters))
         analysis = deepcopy(provider_analysis)
 
+        chapter_indexes = {chapter.index for chapter in job.chapters}
+        validate_analysis(analysis, chapter_indexes)
+
         return replace(
             job,
             state=AdaptationState.ANALYSIS_GENERATED,

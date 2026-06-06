@@ -257,6 +257,118 @@ def test_generate_analysis_rejects_wrong_state():
         service.generate_analysis(job)
 
 
+class BadCharacterRefProvider:
+    """Returns analysis with an event referencing a non-existent character."""
+
+    def analyze_chapters(self, chapters):
+        return AIAnalysis(
+            characters=[
+                Character(
+                    id="char-001",
+                    name="林照",
+                    role="protagonist",
+                    description="主角。",
+                    goal="查明真相。",
+                    motivation="保护家人。",
+                )
+            ],
+            key_events=[
+                KeyEvent(
+                    id="event-001",
+                    summary="事件。",
+                    character_ids=["char-nonexistent"],
+                    source_chapter_indexes=[1],
+                )
+            ],
+        )
+
+
+def test_generate_analysis_rejects_invalid_character_ref():
+    """Provider output with bad character ref must not enter ANALYSIS_GENERATED."""
+    service = AdaptationService(BadCharacterRefProvider())
+    job = service.attach_chapters(
+        service.create_job("job-001"),
+        make_chapters(),
+    )
+
+    with pytest.raises(AnalysisValidationError, match="unknown character"):
+        service.generate_analysis(job)
+
+    # Job state must remain unchanged
+    assert job.state == AdaptationState.CHAPTERS_UPLOADED
+    assert job.ai_analysis is None
+
+
+class BadChapterIndexProvider:
+    """Returns analysis with a conflict referencing a non-existent chapter."""
+
+    def analyze_chapters(self, chapters):
+        return AIAnalysis(
+            conflicts=[
+                Conflict(
+                    id="conflict-001",
+                    description="冲突。",
+                    stakes="高风险。",
+                    source_chapter_indexes=[99],
+                )
+            ],
+        )
+
+
+def test_generate_analysis_rejects_invalid_chapter_index():
+    """Provider output with bad chapter index must not enter ANALYSIS_GENERATED."""
+    service = AdaptationService(BadChapterIndexProvider())
+    job = service.attach_chapters(
+        service.create_job("job-001"),
+        make_chapters(),
+    )
+
+    with pytest.raises(AnalysisValidationError, match="unknown chapter"):
+        service.generate_analysis(job)
+
+    assert job.state == AdaptationState.CHAPTERS_UPLOADED
+    assert job.ai_analysis is None
+
+
+class BadUncertaintyProvider:
+    """Returns analysis with 1 option and allow_custom_answer=False."""
+
+    def analyze_chapters(self, chapters):
+        return AIAnalysis(
+            uncertainties=[
+                Uncertainty(
+                    id="uncertainty-001",
+                    question="?",
+                    context="ctx",
+                    options=[
+                        UncertaintyOption(
+                            id="opt-001",
+                            label="唯一选项",
+                            description="只有一个选项。",
+                            impact="重大。",
+                        )
+                    ],
+                    allow_custom_answer=False,
+                )
+            ],
+        )
+
+
+def test_generate_analysis_rejects_invalid_uncertainty():
+    """Provider output with invalid uncertainty must not enter ANALYSIS_GENERATED."""
+    service = AdaptationService(BadUncertaintyProvider())
+    job = service.attach_chapters(
+        service.create_job("job-001"),
+        make_chapters(),
+    )
+
+    with pytest.raises(AnalysisValidationError, match="between 2 and 4"):
+        service.generate_analysis(job)
+
+    assert job.state == AdaptationState.CHAPTERS_UPLOADED
+    assert job.ai_analysis is None
+
+
 def test_confirm_analysis_validates_and_advances_state():
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_analysis_generated_job(service)
