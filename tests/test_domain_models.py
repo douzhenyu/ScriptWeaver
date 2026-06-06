@@ -1,4 +1,5 @@
 from scriptweaver.domain.models import (
+    AdaptationDecision,
     AdaptationJob,
     AdaptationPlan,
     AIAnalysis,
@@ -8,6 +9,8 @@ from scriptweaver.domain.models import (
     CharacterRelationship,
     Conflict,
     KeyEvent,
+    PlanReviewQuestion,
+    ScenePlan,
     ScreenplayDraft,
     Theme,
     Uncertainty,
@@ -230,7 +233,26 @@ def test_adaptation_job_serializes_nested_workflow_data():
         adaptation_plan=AdaptationPlan(
             target_format="short_drama",
             structure="three_scene_sequence",
-            scene_ids=["scene_001", "scene_002", "scene_003"],
+            scenes=[
+                ScenePlan(
+                    id="scene_plan_001",
+                    scene_order=1,
+                    title="密信出现",
+                    dramatic_purpose="建立调查目标。",
+                    character_ids=["char_001"],
+                    source_chapter_indexes=[1],
+                    retained_event_ids=["confirmed_event_001"],
+                    source_candidate_scene_ids=["candidate_scene_001"],
+                )
+            ],
+            review_questions=[
+                PlanReviewQuestion(
+                    id="question_plan_001",
+                    question="是否保留三场结构？",
+                    context="答案会影响整体节奏。",
+                    related_scene_ids=["scene_plan_001"],
+                )
+            ],
         ),
         screenplay_draft=ScreenplayDraft(
             scene_ids=["scene_001", "scene_002", "scene_003"],
@@ -337,10 +359,225 @@ def test_adaptation_job_serializes_nested_workflow_data():
         "adaptation_plan": {
             "target_format": "short_drama",
             "structure": "three_scene_sequence",
-            "scene_ids": ["scene_001", "scene_002", "scene_003"],
+            "scenes": [
+                {
+                    "id": "scene_plan_001",
+                    "scene_order": 1,
+                    "title": "密信出现",
+                    "dramatic_purpose": "建立调查目标。",
+                    "character_ids": ["char_001"],
+                    "source_chapter_indexes": [1],
+                    "retained_event_ids": ["confirmed_event_001"],
+                    "source_candidate_scene_ids": ["candidate_scene_001"],
+                    "compression_choices": [],
+                    "merge_choices": [],
+                    "rewrite_choices": [],
+                    "review_questions": [],
+                }
+            ],
+            "review_questions": [
+                {
+                    "id": "question_plan_001",
+                    "question": "是否保留三场结构？",
+                    "context": "答案会影响整体节奏。",
+                    "related_scene_ids": ["scene_plan_001"],
+                }
+            ],
         },
         "screenplay_draft": {
             "scene_ids": ["scene_001", "scene_002", "scene_003"],
             "revision_notes": ["沈微动机需要作者确认。"],
         },
     }
+
+
+def test_structured_adaptation_plan_models_serialize_to_plain_dicts():
+    compression = AdaptationDecision(
+        id="decision_compress_001",
+        description="将调查准备过程压缩为一次电话交谈。",
+        reason="更快进入密信冲突。",
+        source_event_ids=["event_001"],
+    )
+    merge = AdaptationDecision(
+        id="decision_merge_001",
+        description="合并两次线索发现。",
+        reason="避免重复的信息揭示。",
+        source_event_ids=["event_002", "event_003"],
+    )
+    rewrite = AdaptationDecision(
+        id="decision_rewrite_001",
+        description="让沈微当面阻止林照公开密信。",
+        reason="将内心矛盾外化为人物冲突。",
+        source_event_ids=["event_004"],
+    )
+    scene_question = PlanReviewQuestion(
+        id="question_scene_001",
+        question="沈微是否应在本场承认知情？",
+        context="答案会改变本场结尾的悬念。",
+        related_scene_ids=["scene_plan_001"],
+    )
+    scene = ScenePlan(
+        id="scene_plan_001",
+        scene_order=1,
+        title="密信对峙",
+        dramatic_purpose="建立调查目标并引爆人物冲突。",
+        character_ids=["char_001", "char_002"],
+        source_chapter_indexes=[1, 2],
+        retained_event_ids=["event_001", "event_004"],
+        source_candidate_scene_ids=["candidate_scene_001"],
+        compression_choices=[compression],
+        merge_choices=[merge],
+        rewrite_choices=[rewrite],
+        review_questions=[scene_question],
+    )
+    plan_question = PlanReviewQuestion(
+        id="question_plan_001",
+        question="前三场是否都应围绕密信展开？",
+        context="答案会影响整体节奏和支线占比。",
+        related_scene_ids=["scene_plan_001", "scene_plan_002"],
+    )
+    plan = AdaptationPlan(
+        target_format="short_drama",
+        structure="three_scene_sequence",
+        scenes=[scene],
+        review_questions=[plan_question],
+    )
+
+    assert compression.to_dict() == {
+        "id": "decision_compress_001",
+        "description": "将调查准备过程压缩为一次电话交谈。",
+        "reason": "更快进入密信冲突。",
+        "source_event_ids": ["event_001"],
+    }
+    assert scene_question.to_dict() == {
+        "id": "question_scene_001",
+        "question": "沈微是否应在本场承认知情？",
+        "context": "答案会改变本场结尾的悬念。",
+        "related_scene_ids": ["scene_plan_001"],
+    }
+    assert scene.to_dict() == {
+        "id": "scene_plan_001",
+        "scene_order": 1,
+        "title": "密信对峙",
+        "dramatic_purpose": "建立调查目标并引爆人物冲突。",
+        "character_ids": ["char_001", "char_002"],
+        "source_chapter_indexes": [1, 2],
+        "retained_event_ids": ["event_001", "event_004"],
+        "source_candidate_scene_ids": ["candidate_scene_001"],
+        "compression_choices": [
+            {
+                "id": "decision_compress_001",
+                "description": "将调查准备过程压缩为一次电话交谈。",
+                "reason": "更快进入密信冲突。",
+                "source_event_ids": ["event_001"],
+            }
+        ],
+        "merge_choices": [
+            {
+                "id": "decision_merge_001",
+                "description": "合并两次线索发现。",
+                "reason": "避免重复的信息揭示。",
+                "source_event_ids": ["event_002", "event_003"],
+            }
+        ],
+        "rewrite_choices": [
+            {
+                "id": "decision_rewrite_001",
+                "description": "让沈微当面阻止林照公开密信。",
+                "reason": "将内心矛盾外化为人物冲突。",
+                "source_event_ids": ["event_004"],
+            }
+        ],
+        "review_questions": [
+            {
+                "id": "question_scene_001",
+                "question": "沈微是否应在本场承认知情？",
+                "context": "答案会改变本场结尾的悬念。",
+                "related_scene_ids": ["scene_plan_001"],
+            }
+        ],
+    }
+    assert plan.to_dict() == {
+        "target_format": "short_drama",
+        "structure": "three_scene_sequence",
+        "scenes": [scene.to_dict()],
+        "review_questions": [
+            {
+                "id": "question_plan_001",
+                "question": "前三场是否都应围绕密信展开？",
+                "context": "答案会影响整体节奏和支线占比。",
+                "related_scene_ids": ["scene_plan_001", "scene_plan_002"],
+            }
+        ],
+    }
+
+
+def test_structured_adaptation_plan_defaults_are_independent():
+    first_decision = AdaptationDecision(
+        id="decision_001",
+        description="压缩调查过程。",
+        reason="控制节奏。",
+    )
+    second_decision = AdaptationDecision(
+        id="decision_002",
+        description="重写发现方式。",
+        reason="增强冲突。",
+    )
+    first_question = PlanReviewQuestion(
+        id="question_001",
+        question="是否保留支线？",
+        context="影响整体时长。",
+    )
+    second_question = PlanReviewQuestion(
+        id="question_002",
+        question="是否提前揭示真相？",
+        context="影响悬念。",
+    )
+    first_scene = ScenePlan(
+        id="scene_plan_001",
+        scene_order=1,
+        title="密信出现",
+        dramatic_purpose="建立目标。",
+    )
+    second_scene = ScenePlan(
+        id="scene_plan_002",
+        scene_order=2,
+        title="首次追查",
+        dramatic_purpose="升级冲突。",
+    )
+    first_plan = AdaptationPlan(
+        target_format="short_drama",
+        structure="linear",
+    )
+    second_plan = AdaptationPlan(
+        target_format="short_drama",
+        structure="linear",
+    )
+
+    first_decision.source_event_ids.append("event_001")
+    first_question.related_scene_ids.append("scene_plan_001")
+    first_scene.character_ids.append("char_001")
+    first_scene.source_chapter_indexes.append(1)
+    first_scene.retained_event_ids.append("event_001")
+    first_scene.source_candidate_scene_ids.append("candidate_scene_001")
+    first_scene.compression_choices.append(first_decision)
+    first_scene.merge_choices.append(first_decision)
+    first_scene.rewrite_choices.append(first_decision)
+    first_scene.review_questions.append(first_question)
+    first_plan.scenes.append(first_scene)
+    first_plan.review_questions.append(first_question)
+
+    assert second_decision.source_event_ids == []
+    assert second_question.related_scene_ids == []
+    assert second_scene.character_ids == []
+    assert second_scene.source_chapter_indexes == []
+    assert second_scene.retained_event_ids == []
+    assert second_scene.source_candidate_scene_ids == []
+    assert second_scene.compression_choices == []
+    assert second_scene.merge_choices == []
+    assert second_scene.rewrite_choices == []
+    assert second_scene.review_questions == []
+    assert second_plan.scenes == []
+    assert second_plan.review_questions == []
+    assert not hasattr(first_plan, "scene_ids")
+    assert "scene_ids" not in first_plan.to_dict()

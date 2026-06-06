@@ -135,10 +135,52 @@ class UserConfirmations:
 
 
 @dataclass(frozen=True)
+class AdaptationDecision:
+    id: str
+    description: str
+    reason: str
+    source_event_ids: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class PlanReviewQuestion:
+    id: str
+    question: str
+    context: str
+    related_scene_ids: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ScenePlan:
+    id: str
+    scene_order: int
+    title: str
+    dramatic_purpose: str
+    character_ids: list[str] = field(default_factory=list)
+    source_chapter_indexes: list[int] = field(default_factory=list)
+    retained_event_ids: list[str] = field(default_factory=list)
+    source_candidate_scene_ids: list[str] = field(default_factory=list)
+    compression_choices: list[AdaptationDecision] = field(default_factory=list)
+    merge_choices: list[AdaptationDecision] = field(default_factory=list)
+    rewrite_choices: list[AdaptationDecision] = field(default_factory=list)
+    review_questions: list[PlanReviewQuestion] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class AdaptationPlan:
     target_format: str
     structure: str
-    scene_ids: list[str] = field(default_factory=list)
+    scenes: list[ScenePlan] = field(default_factory=list)
+    review_questions: list[PlanReviewQuestion] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
