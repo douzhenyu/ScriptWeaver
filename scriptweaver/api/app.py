@@ -84,21 +84,24 @@ class ConfirmAnalysisRequest(BaseModel):
                 ),
             )
 
-        return AIAnalysis(
-            characters=[Character(**c) for c in self.characters],
-            relationships=[
-                CharacterRelationship(**r) for r in self.relationships
-            ],
-            key_events=[KeyEvent(**k) for k in self.key_events],
-            conflicts=[Conflict(**c) for c in self.conflicts],
-            themes=[Theme(**t) for t in self.themes],
-            candidate_scenes=[
-                CandidateScene(**s) for s in self.candidate_scenes
-            ],
-            uncertainties=[
-                _parse_uncertainty(u) for u in self.uncertainties
-            ],
-        )
+        try:
+            return AIAnalysis(
+                characters=[Character(**c) for c in self.characters],
+                relationships=[
+                    CharacterRelationship(**r) for r in self.relationships
+                ],
+                key_events=[KeyEvent(**k) for k in self.key_events],
+                conflicts=[Conflict(**c) for c in self.conflicts],
+                themes=[Theme(**t) for t in self.themes],
+                candidate_scenes=[
+                    CandidateScene(**s) for s in self.candidate_scenes
+                ],
+                uncertainties=[
+                    _parse_uncertainty(u) for u in self.uncertainties
+                ],
+            )
+        except (TypeError, KeyError) as error:
+            raise ValueError(str(error)) from error
 
 
 class UncertaintyAnswerRequest(BaseModel):
@@ -134,46 +137,49 @@ class ConfirmPlanRequest(BaseModel):
                 for d in raw_list
             ]
 
-        return AdaptationPlan(
-            target_format=self.target_format,
-            structure=self.structure,
-            scenes=[
-                ScenePlan(
-                    id=s["id"],
-                    scene_order=s["scene_order"],
-                    title=s["title"],
-                    dramatic_purpose=s["dramatic_purpose"],
-                    character_ids=s.get("character_ids", []),
-                    source_chapter_indexes=s.get(
-                        "source_chapter_indexes", []
-                    ),
-                    retained_event_ids=s.get(
-                        "retained_event_ids", []
-                    ),
-                    source_candidate_scene_ids=s.get(
-                        "source_candidate_scene_ids", []
-                    ),
-                    compression_choices=_parse_decisions(
-                        s.get("compression_choices", [])
-                    ),
-                    merge_choices=_parse_decisions(
-                        s.get("merge_choices", [])
-                    ),
-                    rewrite_choices=_parse_decisions(
-                        s.get("rewrite_choices", [])
-                    ),
-                    review_questions=[
-                        PlanReviewQuestion(**rq)
-                        for rq in s.get("review_questions", [])
-                    ],
-                )
-                for s in self.scenes
-            ],
-            review_questions=[
-                PlanReviewQuestion(**rq)
-                for rq in self.review_questions
-            ],
-        )
+        try:
+            return AdaptationPlan(
+                target_format=self.target_format,
+                structure=self.structure,
+                scenes=[
+                    ScenePlan(
+                        id=s["id"],
+                        scene_order=s["scene_order"],
+                        title=s["title"],
+                        dramatic_purpose=s["dramatic_purpose"],
+                        character_ids=s.get("character_ids", []),
+                        source_chapter_indexes=s.get(
+                            "source_chapter_indexes", []
+                        ),
+                        retained_event_ids=s.get(
+                            "retained_event_ids", []
+                        ),
+                        source_candidate_scene_ids=s.get(
+                            "source_candidate_scene_ids", []
+                        ),
+                        compression_choices=_parse_decisions(
+                            s.get("compression_choices", [])
+                        ),
+                        merge_choices=_parse_decisions(
+                            s.get("merge_choices", [])
+                        ),
+                        rewrite_choices=_parse_decisions(
+                            s.get("rewrite_choices", [])
+                        ),
+                        review_questions=[
+                            PlanReviewQuestion(**rq)
+                            for rq in s.get("review_questions", [])
+                        ],
+                    )
+                    for s in self.scenes
+                ],
+                review_questions=[
+                    PlanReviewQuestion(**rq)
+                    for rq in self.review_questions
+                ],
+            )
+        except (TypeError, KeyError) as error:
+            raise ValueError(str(error)) from error
 
 
 # ── App factory ──────────────────────────────────────────────────
@@ -279,12 +285,12 @@ def create_app(
     @app.post("/jobs/{job_id}/confirm-analysis")
     def confirm_analysis(job_id: str, req: ConfirmAnalysisRequest):
         job = _get_job(job_id)
-        analysis = req.to_analysis()
         try:
+            analysis = req.to_analysis()
             job = service.confirm_analysis(job, analysis)
         except WorkflowTransitionError as error:
             _handle_error(409, str(error))
-        except AnalysisValidationError as error:
+        except (AnalysisValidationError, ValueError) as error:
             _handle_error(400, str(error))
         _save_job(job)
         return _job_to_response(job)
@@ -343,12 +349,12 @@ def create_app(
     @app.post("/jobs/{job_id}/confirm-plan")
     def confirm_plan(job_id: str, req: ConfirmPlanRequest):
         job = _get_job(job_id)
-        plan = req.to_plan()
         try:
+            plan = req.to_plan()
             job = service.confirm_plan(job, plan)
         except WorkflowTransitionError as error:
             _handle_error(409, str(error))
-        except PlanValidationError as error:
+        except (PlanValidationError, ValueError) as error:
             _handle_error(400, str(error))
         _save_job(job)
         return _job_to_response(job)
