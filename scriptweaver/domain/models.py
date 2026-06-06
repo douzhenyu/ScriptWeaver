@@ -159,6 +159,7 @@ class AdaptationJob:
     state: AdaptationState = AdaptationState.CREATED
     chapters: list[Chapter] = field(default_factory=list)
     ai_analysis: AIAnalysis | None = None
+    confirmed_analysis: AIAnalysis | None = None
     user_confirmations: UserConfirmations | None = None
     adaptation_plan: AdaptationPlan | None = None
     screenplay_draft: ScreenplayDraft | None = None
@@ -170,6 +171,11 @@ class AdaptationJob:
             "chapters": [chapter.to_dict() for chapter in self.chapters],
             "ai_analysis": (
                 self.ai_analysis.to_dict() if self.ai_analysis is not None else None
+            ),
+            "confirmed_analysis": (
+                self.confirmed_analysis.to_dict()
+                if self.confirmed_analysis is not None
+                else None
             ),
             "user_confirmations": (
                 self.user_confirmations.to_dict()

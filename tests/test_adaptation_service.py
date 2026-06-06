@@ -1,6 +1,9 @@
+from dataclasses import replace
+
 import pytest
 
 from scriptweaver.ai.mock_provider import MockAIAnalysisProvider
+from scriptweaver.domain.analysis_validation import AnalysisValidationError
 from scriptweaver.domain.models import (
     AIAnalysis,
     Chapter,
@@ -21,6 +24,35 @@ def make_chapters() -> list[Chapter]:
         Chapter(index=2, title="第二章", content="沈微出现并阻止林照公开密信。"),
         Chapter(index=3, title="第三章", content="两人发现密信指向旧案。"),
     ]
+
+
+def make_confirmed_analysis() -> AIAnalysis:
+    return AIAnalysis(
+        characters=[
+            Character(
+                id="char-confirmed",
+                name="林照",
+                role="protagonist",
+                description="用户确认后的主角描述。",
+                goal="查明真相。",
+                motivation="保护家人。",
+            )
+        ],
+        key_events=[
+            KeyEvent(
+                id="event-confirmed",
+                summary="用户确认密信必须保留。",
+                character_ids=["char-confirmed"],
+                source_chapter_indexes=[1],
+            )
+        ],
+    )
+
+
+def make_analysis_generated_job(service: AdaptationService):
+    job = service.create_job("job-001")
+    job = service.attach_chapters(job, make_chapters())
+    return service.generate_analysis(job)
 
 
 def test_create_job_starts_in_created_state():
@@ -208,3 +240,74 @@ def test_generate_analysis_rejects_wrong_state():
 
     with pytest.raises(WorkflowTransitionError, match="Cannot transition"):
         service.generate_analysis(job)
+
+
+def test_confirm_analysis_validates_and_advances_state():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    raw_analysis = job.ai_analysis
+    confirmed_analysis = make_confirmed_analysis()
+
+    updated_job = service.confirm_analysis(job, confirmed_analysis)
+
+    assert updated_job is not job
+    assert updated_job.state == AdaptationState.ANALYSIS_CONFIRMED
+    assert updated_job.ai_analysis is raw_analysis
+    assert updated_job.confirmed_analysis == confirmed_analysis
+    assert updated_job.confirmed_analysis is not confirmed_analysis
+    assert job.state == AdaptationState.ANALYSIS_GENERATED
+    assert job.confirmed_analysis is None
+
+
+def test_confirm_analysis_accepts_empty_analysis():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+
+    updated_job = service.confirm_analysis(job, AIAnalysis())
+
+    assert updated_job.state == AdaptationState.ANALYSIS_CONFIRMED
+    assert updated_job.confirmed_analysis == AIAnalysis()
+
+
+def test_confirm_analysis_rejects_invalid_analysis():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    confirmed_analysis = make_confirmed_analysis()
+    character = confirmed_analysis.characters[0]
+    invalid_analysis = replace(
+        confirmed_analysis,
+        characters=[character, character],
+    )
+
+    with pytest.raises(
+        AnalysisValidationError,
+        match="Duplicate characters id: char-confirmed",
+    ):
+        service.confirm_analysis(job, invalid_analysis)
+
+    assert job.state == AdaptationState.ANALYSIS_GENERATED
+    assert job.confirmed_analysis is None
+
+
+def test_confirm_analysis_rejects_wrong_state_before_analysis_validation():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = service.create_job("job-001")
+    character = make_confirmed_analysis().characters[0]
+    invalid_analysis = AIAnalysis(characters=[character, character])
+
+    with pytest.raises(WorkflowTransitionError, match="Cannot transition"):
+        service.confirm_analysis(job, invalid_analysis)
+
+
+def test_confirm_analysis_deep_copies_submitted_snapshot():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    confirmed_analysis = make_confirmed_analysis()
+
+    updated_job = service.confirm_analysis(job, confirmed_analysis)
+    confirmed_analysis.key_events[0].character_ids.clear()
+    confirmed_analysis.key_events[0].source_chapter_indexes.clear()
+    confirmed_analysis.characters.clear()
+    confirmed_analysis.key_events.clear()
+
+    assert updated_job.confirmed_analysis == make_confirmed_analysis()

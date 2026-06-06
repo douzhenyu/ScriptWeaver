@@ -22,6 +22,8 @@ def test_adaptation_job_defaults_to_created_state():
     assert job.id == "job_001"
     assert job.state == AdaptationState.CREATED
     assert job.chapters == []
+    assert job.ai_analysis is None
+    assert job.confirmed_analysis is None
 
 
 def test_chapter_model_serializes_to_plain_dict():
@@ -210,6 +212,16 @@ def test_adaptation_job_serializes_nested_workflow_data():
                 )
             ],
         ),
+        confirmed_analysis=AIAnalysis(
+            key_events=[
+                KeyEvent(
+                    id="confirmed_event_001",
+                    summary="用户确认密信必须保留。",
+                    character_ids=["char_001"],
+                    source_chapter_indexes=[1],
+                )
+            ]
+        ),
         user_confirmations=UserConfirmations(
             accepted_character_ids=["char_001"],
             required_plot_points=["密信必须保留"],
@@ -300,6 +312,22 @@ def test_adaptation_job_serializes_nested_workflow_data():
                     "source_chapter_indexes": [1, 2],
                 }
             ],
+        },
+        "confirmed_analysis": {
+            "characters": [],
+            "relationships": [],
+            "key_events": [
+                {
+                    "id": "confirmed_event_001",
+                    "summary": "用户确认密信必须保留。",
+                    "character_ids": ["char_001"],
+                    "source_chapter_indexes": [1],
+                }
+            ],
+            "conflicts": [],
+            "themes": [],
+            "candidate_scenes": [],
+            "uncertainties": [],
         },
         "user_confirmations": {
             "accepted_character_ids": ["char_001"],
