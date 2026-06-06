@@ -5,6 +5,7 @@ from scriptweaver.api.app import create_app
 from scriptweaver.ai.mock_provider import (
     MockAIAnalysisProvider,
     MockPlanProvider,
+    MockScreenplayProvider,
 )
 
 
@@ -13,6 +14,7 @@ def client():
     app = create_app(
         MockAIAnalysisProvider(),
         plan_provider=MockPlanProvider(),
+        screenplay_provider=MockScreenplayProvider(),
     )
     return TestClient(app)
 
@@ -260,6 +262,32 @@ def test_confirm_plan(client):
     assert data["state"] == "plan_confirmed"
 
 
+# ── Generate screenplay ──────────────────────────────────────────────
+
+
+def test_generate_screenplay(client):
+    """API must support advancing from plan_confirmed to screenplay_generated."""
+    _bootstrap_to_plan_confirmed(client)
+
+    response = client.post("/jobs/job-001/generate-screenplay")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["state"] == "screenplay_generated"
+    screenplay = data["screenplay_draft"]
+    assert screenplay is not None
+    assert len(screenplay["scenes"]) >= 1
+
+
+def test_generate_screenplay_rejects_wrong_state(client):
+    """Cannot generate screenplay before plan is confirmed."""
+    client.post("/jobs", json={"job_id": "job-001"})
+
+    response = client.post("/jobs/job-001/generate-screenplay")
+
+    assert response.status_code == 409
+
+
 # ── Get job ──────────────────────────────────────────────────────
 
 
@@ -367,3 +395,25 @@ def _bootstrap_to_analysis_confirmed(client):
 def _bootstrap_to_plan_generated(client):
     _bootstrap_to_analysis_confirmed(client)
     client.post("/jobs/job-001/generate-plan")
+
+
+def _bootstrap_to_plan_confirmed(client):
+    _bootstrap_to_plan_generated(client)
+    client.post(
+        "/jobs/job-001/confirm-plan",
+        json={
+            "target_format": "short",
+            "structure": "1 scene",
+            "scenes": [
+                {
+                    "id": "scene_001",
+                    "scene_order": 1,
+                    "title": "Scene 1",
+                    "dramatic_purpose": "purpose",
+                    "character_ids": ["char_001"],
+                    "source_chapter_indexes": [1],
+                }
+            ],
+            "review_questions": [],
+        },
+    )
