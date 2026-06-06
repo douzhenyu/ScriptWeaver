@@ -21,6 +21,80 @@ class Character:
     id: str
     name: str
     role: str
+    description: str
+    goal: str
+    motivation: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CharacterRelationship:
+    id: str
+    source_character_id: str
+    target_character_id: str
+    description: str
+    source_chapter_indexes: list[int] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class KeyEvent:
+    id: str
+    summary: str
+    character_ids: list[str] = field(default_factory=list)
+    source_chapter_indexes: list[int] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class Conflict:
+    id: str
+    description: str
+    stakes: str
+    character_ids: list[str] = field(default_factory=list)
+    source_chapter_indexes: list[int] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class Theme:
+    id: str
+    statement: str
+    source_chapter_indexes: list[int] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CandidateScene:
+    id: str
+    title: str
+    summary: str
+    dramatic_purpose: str
+    location: str
+    time_hint: str
+    character_ids: list[str] = field(default_factory=list)
+    source_chapter_indexes: list[int] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class Uncertainty:
+    id: str
+    question: str
+    context: str
+    source_chapter_indexes: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -29,14 +103,24 @@ class Character:
 @dataclass(frozen=True)
 class AIAnalysis:
     characters: list[Character] = field(default_factory=list)
-    conflicts: list[str] = field(default_factory=list)
-    key_events: list[str] = field(default_factory=list)
+    relationships: list[CharacterRelationship] = field(default_factory=list)
+    key_events: list[KeyEvent] = field(default_factory=list)
+    conflicts: list[Conflict] = field(default_factory=list)
+    themes: list[Theme] = field(default_factory=list)
+    candidate_scenes: list[CandidateScene] = field(default_factory=list)
+    uncertainties: list[Uncertainty] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "characters": [character.to_dict() for character in self.characters],
-            "conflicts": list(self.conflicts),
-            "key_events": list(self.key_events),
+            "characters": [item.to_dict() for item in self.characters],
+            "relationships": [item.to_dict() for item in self.relationships],
+            "key_events": [item.to_dict() for item in self.key_events],
+            "conflicts": [item.to_dict() for item in self.conflicts],
+            "themes": [item.to_dict() for item in self.themes],
+            "candidate_scenes": [
+                item.to_dict() for item in self.candidate_scenes
+            ],
+            "uncertainties": [item.to_dict() for item in self.uncertainties],
         }
 
 
