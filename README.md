@@ -1,6 +1,6 @@
 # ScriptWeaver
 
-ScriptWeaver is a human-in-the-loop AI backend for helping novel authors adapt three or more novel chapters into editable screenplay drafts.
+ScriptWeaver is a human-in-the-loop AI backend for helping novel authors adapt one or more novel chapters into editable screenplay drafts, including inputs containing three or more chapters.
 
 ## Development
 

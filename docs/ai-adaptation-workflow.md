@@ -2,14 +2,14 @@
 
 ## Purpose
 
-ScriptWeaver is a human-in-the-loop AI adaptation workflow for helping novel authors turn three or more novel chapters into an editable screenplay draft.
+ScriptWeaver is a human-in-the-loop AI adaptation workflow for helping novel authors turn one or more novel chapters into an editable screenplay draft, including inputs containing three or more chapters.
 
 The AI does not simply reformat prose. It helps the author understand the source material, decide what to preserve or change, and generate a screenplay draft from confirmed creative decisions.
 
 ## Workflow Summary
 
 ```text
-Upload 3+ chapters
+Upload one or more chapters
   -> AI story analysis
   -> User confirms or edits analysis
   -> AI adaptation planning
@@ -22,13 +22,13 @@ Upload 3+ chapters
 
 Input:
 
-- At least three novel chapters.
+- One or more novel chapters. The backend supports inputs containing three or more chapters.
 - Chapter title or sequence number.
 - Chapter body text.
 
 System responsibilities:
 
-- Reject fewer than three chapters.
+- Reject empty chapter lists.
 - Reject empty chapter content.
 - Preserve chapter order.
 - Preserve source references for later traceability.
@@ -44,6 +44,7 @@ AI responsibilities:
 - Identify main characters and supporting characters.
 - Infer character goals and relationships.
 - Extract key events.
+- Analyze every uploaded chapter without truncation.
 - Identify locations and time cues.
 - Identify core conflicts.
 - Identify candidate dramatic scenes.
@@ -139,7 +140,7 @@ The backend should eventually represent the workflow with these states:
 | State | Meaning | Allowed Next State |
 | --- | --- | --- |
 | `created` | Adaptation job exists but chapters are incomplete. | `chapters_uploaded` |
-| `chapters_uploaded` | At least three valid chapters are available. | `analysis_generated` |
+| `chapters_uploaded` | One or more valid chapters are available. | `analysis_generated` |
 | `analysis_generated` | Raw AI analysis exists. | `analysis_confirmed` |
 | `analysis_confirmed` | User-confirmed analysis exists. | `plan_generated` |
 | `plan_generated` | AI adaptation plan exists. | `plan_confirmed` |
