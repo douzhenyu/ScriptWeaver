@@ -298,6 +298,20 @@ def create_app(
         _save_job(job)
         return _job_to_response(job)
 
+    # ── Generate screenplay ───────────────────────────────────
+
+    @app.post("/jobs/{job_id}/generate-screenplay")
+    def generate_screenplay(job_id: str):
+        job = _get_job(job_id)
+        try:
+            job = service.generate_screenplay(job)
+        except WorkflowTransitionError as error:
+            _handle_error(409, str(error))
+        except AdaptationServiceError as error:
+            _handle_error(400, str(error))
+        _save_job(job)
+        return _job_to_response(job)
+
     return app
 
 
