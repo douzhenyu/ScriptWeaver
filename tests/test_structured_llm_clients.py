@@ -40,12 +40,23 @@ def test_structured_llm_error_is_runtime_error():
 # ---- Fake SDK helpers ----
 
 class FakeCompletions:
-    def __init__(self, content: str = '{"status": "ok"}') -> None:
+    def __init__(
+        self,
+        content: str = '{"status": "ok"}',
+        response: Any | None = None,
+        error: Exception | None = None,
+    ) -> None:
         self.content = content
+        self.response = response
+        self.error = error
         self.calls: list[dict[str, Any]] = []
 
     def create(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
+        if self.error is not None:
+            raise self.error
+        if self.response is not None:
+            return self.response
         return SimpleNamespace(
             choices=[
                 SimpleNamespace(
@@ -65,6 +76,24 @@ class FakeOpenAIFactory:
         return SimpleNamespace(
             chat=SimpleNamespace(completions=self.completions),
         )
+
+
+def make_openai_compatible_client(monkeypatch, completions):
+    from scriptweaver.llm import openai_compatible
+    from scriptweaver.llm.openai_compatible import (
+        OpenAICompatibleStructuredLLMClient,
+    )
+
+    monkeypatch.setattr(
+        openai_compatible,
+        "OpenAI",
+        FakeOpenAIFactory(completions),
+    )
+    return OpenAICompatibleStructuredLLMClient(
+        api_key="secret-key",
+        base_url="https://example.test/v1",
+        model="example-model",
+    )
 
 
 # ---- Happy-path and request-construction tests ----
@@ -215,3 +244,94 @@ def test_openai_compatible_client_rejects_blank_input_without_request(
         client.generate_json("system", input_prompt)
 
     assert completions.calls == []
+
+
+# ---- SDK error and malformed response tests ----
+
+def test_openai_compatible_client_wraps_sdk_error_and_preserves_cause(
+    monkeypatch,
+):
+    from openai import OpenAIError
+
+    sdk_error = OpenAIError("upstream failed")
+    client = make_openai_compatible_client(
+        monkeypatch,
+        FakeCompletions(error=sdk_error),
+    )
+
+    with pytest.raises(StructuredLLMError, match="request failed") as exc_info:
+        client.generate_json("system", "input")
+
+    assert exc_info.value.__cause__ is sdk_error
+
+
+def test_openai_compatible_client_rejects_missing_choices(monkeypatch):
+    client = make_openai_compatible_client(
+        monkeypatch,
+        FakeCompletions(response=SimpleNamespace(choices=[])),
+    )
+
+    with pytest.raises(StructuredLLMError, match="no choices"):
+        client.generate_json("system", "input")
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        SimpleNamespace(choices=[SimpleNamespace(message=None)]),
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content=None)),
+            ]
+        ),
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content=" \n ")),
+            ]
+        ),
+    ],
+)
+def test_openai_compatible_client_rejects_missing_or_blank_content(
+    monkeypatch,
+    response,
+):
+    client = make_openai_compatible_client(
+        monkeypatch,
+        FakeCompletions(response=response),
+    )
+
+    with pytest.raises(StructuredLLMError, match="content is empty"):
+        client.generate_json("system", "input")
+
+
+# ---- Invalid JSON and non-object JSON tests ----
+
+def test_openai_compatible_client_wraps_invalid_json_and_preserves_cause(
+    monkeypatch,
+):
+    client = make_openai_compatible_client(
+        monkeypatch,
+        FakeCompletions(content="not-json"),
+    )
+
+    with pytest.raises(StructuredLLMError, match="not valid JSON") as exc_info:
+        client.generate_json("system", "input")
+
+    assert isinstance(exc_info.value.__cause__, ValueError)
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["[]", '"text"', "1", "true", "null"],
+)
+def test_openai_compatible_client_rejects_non_object_json(
+    monkeypatch,
+    content,
+):
+    client = make_openai_compatible_client(
+        monkeypatch,
+        FakeCompletions(content=content),
+    )
+
+    with pytest.raises(StructuredLLMError, match="must be a JSON object"):
+        client.generate_json("system", "input")

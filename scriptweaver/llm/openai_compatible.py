@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
 from scriptweaver.llm.client import StructuredLLMError
 
@@ -70,12 +70,41 @@ class OpenAICompatibleStructuredLLMClient:
             else JSON_OBJECT_INSTRUCTION
         )
 
-        response = self._sdk_client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {"role": "system", "content": combined_system_prompt},
-                {"role": "user", "content": input_prompt},
-            ],
-            response_format={"type": "json_object"},
-        )
-        return json.loads(response.choices[0].message.content)
+        try:
+            response = self._sdk_client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": combined_system_prompt},
+                    {"role": "user", "content": input_prompt},
+                ],
+                response_format={"type": "json_object"},
+            )
+        except OpenAIError as error:
+            raise StructuredLLMError("Structured LLM request failed") from error
+
+        choices = getattr(response, "choices", None)
+        if not choices:
+            raise StructuredLLMError(
+                "Structured LLM response has no choices"
+            )
+
+        message = getattr(choices[0], "message", None)
+        content = getattr(message, "content", None)
+        if not isinstance(content, str) or not content.strip():
+            raise StructuredLLMError(
+                "Structured LLM response content is empty"
+            )
+
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as error:
+            raise StructuredLLMError(
+                "Structured LLM response content is not valid JSON"
+            ) from error
+
+        if not isinstance(parsed, dict):
+            raise StructuredLLMError(
+                "Structured LLM response must be a JSON object"
+            )
+
+        return parsed
