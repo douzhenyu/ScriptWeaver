@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from scriptweaver.ai.provider import (
@@ -21,6 +21,7 @@ from scriptweaver.domain.uncertainty_validation import (
     UncertaintyValidationError,
 )
 from scriptweaver.domain.workflow import WorkflowTransitionError
+from scriptweaver.export.yaml_exporter import export_job_to_yaml
 from scriptweaver.services.adaptation_service import (
     AdaptationService,
     AdaptationServiceError,
@@ -311,6 +312,32 @@ def create_app(
             _handle_error(400, str(error))
         _save_job(job)
         return _job_to_response(job)
+
+    # ── Export YAML ───────────────────────────────────────────
+
+    @app.get("/jobs/{job_id}/export-yaml")
+    def export_yaml(
+        job_id: str,
+        title: str = Query(default=""),
+        author: str = Query(default=""),
+        adapter: str = Query(default="ScriptWeaver AI"),
+        target_format: str = Query(default="short_drama"),
+        language: str = Query(default="zh-CN"),
+    ):
+        job = _get_job(job_id)
+        metadata = {
+            "title": title,
+            "author": author,
+            "adapter": adapter,
+            "target_format": target_format,
+            "language": language,
+            "created_at": "",
+        }
+        yaml_str = export_job_to_yaml(job, metadata)
+        return Response(
+            content=yaml_str,
+            media_type="application/x-yaml",
+        )
 
     return app
 

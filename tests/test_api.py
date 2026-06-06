@@ -288,6 +288,51 @@ def test_generate_screenplay_rejects_wrong_state(client):
     assert response.status_code == 409
 
 
+# ── Export YAML ────────────────────────────────────────────────────
+
+
+def test_export_yaml_returns_yaml_content(client):
+    """GET /jobs/{id}/export-yaml must return valid YAML."""
+    _bootstrap_to_screenplay_generated(client)
+
+    response = client.get("/jobs/job-001/export-yaml")
+
+    assert response.status_code == 200
+    import yaml
+
+    parsed = yaml.safe_load(response.text)
+    assert parsed["schema_version"] == "1.0"
+    assert parsed["source"] is not None
+    assert "scenes" in parsed["screenplay"]
+
+
+def test_export_yaml_accepts_metadata_query_params(client):
+    """Query params must be embedded in exported YAML metadata."""
+    _bootstrap_to_screenplay_generated(client)
+
+    params = {
+        "title": "测试标题",
+        "author": "测试作者",
+        "adapter": "AI",
+        "target_format": "short_drama",
+        "language": "zh-CN",
+    }
+    response = client.get("/jobs/job-001/export-yaml", params=params)
+
+    assert response.status_code == 200
+    import yaml
+
+    parsed = yaml.safe_load(response.text)
+    assert parsed["metadata"]["title"] == "测试标题"
+    assert parsed["metadata"]["author"] == "测试作者"
+
+
+def test_export_yaml_returns_404_for_unknown_job(client):
+    """Export must return 404 for non-existent job."""
+    response = client.get("/jobs/nonexistent/export-yaml")
+    assert response.status_code == 404
+
+
 # ── Get job ──────────────────────────────────────────────────────
 
 
@@ -417,3 +462,8 @@ def _bootstrap_to_plan_confirmed(client):
             "review_questions": [],
         },
     )
+
+
+def _bootstrap_to_screenplay_generated(client):
+    _bootstrap_to_plan_confirmed(client)
+    client.post("/jobs/job-001/generate-screenplay")
