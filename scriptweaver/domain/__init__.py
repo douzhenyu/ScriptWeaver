@@ -18,6 +18,10 @@ from scriptweaver.domain.models import (
     UncertaintyResolution,
     UserConfirmations,
 )
+from scriptweaver.domain.plan_validation import (
+    PlanValidationError,
+    validate_plan,
+)
 from scriptweaver.domain.uncertainty_validation import (
     UncertaintyValidationError,
     validate_uncertainties,
@@ -39,6 +43,7 @@ __all__ = [
     "Chapter",
     "Character",
     "PlanReviewQuestion",
+    "PlanValidationError",
     "ScenePlan",
     "ScreenplayDraft",
     "UncertaintyOption",
@@ -48,6 +53,7 @@ __all__ = [
     "WorkflowTransitionError",
     "ensure_transition_allowed",
     "validate_analysis",
+    "validate_plan",
     "validate_uncertainties",
     "validate_uncertainty_resolutions",
 ]

@@ -14,11 +14,13 @@ from scriptweaver.domain.models import (
     Character,
     Conflict,
     KeyEvent,
+    ScenePlan,
     Uncertainty,
     UncertaintyOption,
     UncertaintyResolution,
     UserConfirmations,
 )
+from scriptweaver.domain.plan_validation import PlanValidationError
 from scriptweaver.domain.uncertainty_validation import (
     UncertaintyValidationError,
 )
@@ -803,3 +805,113 @@ def test_generate_plan_with_mock_provider():
     assert len(plan.scenes[0].compression_choices) == 1
     assert len(plan.scenes[0].review_questions) == 1
     assert len(plan.review_questions) == 1
+
+
+# ── confirm_plan ─────────────────────────────────────────────────
+
+
+def make_plan_generated_job(service: AdaptationService):
+    job = service.create_job("job-001")
+    job = service.attach_chapters(job, make_chapters())
+    job = service.generate_analysis(job)
+    analysis = job.ai_analysis
+    job = service.confirm_analysis(job, analysis)
+    # Manually set a plan to simulate PLAN_GENERATED state
+    plan = AdaptationPlan(
+        target_format="short_drama",
+        structure="3 scenes, linear progression",
+        scenes=[
+            ScenePlan(
+                id="scene_001",
+                scene_order=1,
+                title="第一幕",
+                dramatic_purpose="建立冲突。",
+                character_ids=["char_001"],
+                source_chapter_indexes=[1],
+                retained_event_ids=["event_001"],
+                source_candidate_scene_ids=["candidate_scene_001"],
+            ),
+            ScenePlan(
+                id="scene_002",
+                scene_order=2,
+                title="第二幕",
+                dramatic_purpose="升级冲突。",
+                character_ids=["char_001"],
+                source_chapter_indexes=[2],
+                retained_event_ids=["event_002"],
+                source_candidate_scene_ids=["candidate_scene_002"],
+            ),
+        ],
+    )
+    return replace(
+        job,
+        state=AdaptationState.PLAN_GENERATED,
+        adaptation_plan=plan,
+    )
+
+
+def test_confirm_plan_validates_and_advances_state():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_plan_generated_job(service)
+    confirmed_plan = job.adaptation_plan
+
+    updated_job = service.confirm_plan(job, confirmed_plan)
+
+    assert updated_job is not job
+    assert updated_job.state == AdaptationState.PLAN_CONFIRMED
+    assert updated_job.adaptation_plan is not None
+    assert (
+        updated_job.adaptation_plan.target_format == "short_drama"
+    )
+    assert updated_job.adaptation_plan is not confirmed_plan
+    assert job.state == AdaptationState.PLAN_GENERATED
+
+
+def test_confirm_plan_rejects_wrong_state():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = service.create_job("job-001")
+    plan = AdaptationPlan(
+        target_format="short_drama", structure="minimal"
+    )
+
+    with pytest.raises(WorkflowTransitionError, match="Cannot transition"):
+        service.confirm_plan(job, plan)
+
+
+def test_confirm_plan_rejects_invalid_plan():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_plan_generated_job(service)
+    invalid_plan = replace(job.adaptation_plan, target_format="")
+
+    with pytest.raises(
+        PlanValidationError,
+        match="target_format must not be blank",
+    ):
+        service.confirm_plan(job, invalid_plan)
+
+    assert job.state == AdaptationState.PLAN_GENERATED
+
+
+def test_confirm_plan_deep_copies_confirmed_plan():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_plan_generated_job(service)
+    confirmed_plan = job.adaptation_plan
+
+    updated_job = service.confirm_plan(job, confirmed_plan)
+    # Mutate the original — stored plan should be unchanged
+    object.__setattr__(confirmed_plan, "target_format", "changed")
+
+    assert (
+        updated_job.adaptation_plan.target_format == "short_drama"
+    )
+
+
+def test_confirm_plan_original_job_unchanged():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_plan_generated_job(service)
+    original_plan = job.adaptation_plan
+
+    service.confirm_plan(job, original_plan)
+
+    assert job.state == AdaptationState.PLAN_GENERATED
+    assert job.adaptation_plan is original_plan
