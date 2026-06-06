@@ -13,6 +13,7 @@ from scriptweaver.domain.models import (
     KeyEvent,
     PlanReviewQuestion,
     ScenePlan,
+    ScreenplayDraft,
     Theme,
     Uncertainty,
     UncertaintyOption,
@@ -216,5 +217,23 @@ class MockPlanProvider:
                         for i in range(1, len(chapters) + 1)
                     ],
                 )
+            ],
+        )
+
+
+class MockScreenplayProvider:
+    """Deterministic screenplay provider for tests and demos."""
+
+    def generate_screenplay(
+        self,
+        confirmed_plan: AdaptationPlan,
+        chapters: list[Chapter],
+    ) -> ScreenplayDraft:
+        scene_ids = [scene.id for scene in confirmed_plan.scenes]
+        return ScreenplayDraft(
+            scene_ids=list(scene_ids),
+            revision_notes=[
+                f"场景 {scene.scene_order}「{scene.title}」需要导演审查节奏。"
+                for scene in confirmed_plan.scenes
             ],
         )
