@@ -23,8 +23,8 @@ class AdaptationService:
         job: AdaptationJob,
         chapters: list[Chapter],
     ) -> AdaptationJob:
-        if len(chapters) < 3:
-            raise AdaptationServiceError("At least 3 chapters are required")
+        if not chapters:
+            raise AdaptationServiceError("At least 1 chapter is required")
 
         for chapter in chapters:
             if not chapter.content.strip():

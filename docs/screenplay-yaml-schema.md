@@ -75,7 +75,7 @@ Fields:
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `source_type` | string | yes | Source input type, normally `novel_chapters`. |
-| `chapter_count` | integer | yes | Number of source chapters. Must be at least 3. |
+| `chapter_count` | integer | yes | Number of source chapters. Must be at least 1. |
 | `chapters` | list | yes | Ordered source chapter metadata. |
 
 Each `source.chapters` item:
@@ -394,7 +394,7 @@ Future implementations should validate:
 
 - `schema_version` exists.
 - `metadata`, `source`, `ai_analysis`, `user_confirmations`, `adaptation_plan`, `screenplay`, and `revision_notes` are required top-level sections.
-- `source.chapter_count` is at least 3.
+- `source.chapter_count` is at least 1.
 - `source.chapters` length matches `source.chapter_count`.
 - `screenplay.scenes` is not empty.
 - Each scene has a heading and at least one beat.

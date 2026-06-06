@@ -52,15 +52,26 @@ def test_attach_chapters_rejects_chapters_uploaded_state():
         service.attach_chapters(chaptered_job, make_chapters())
 
 
-def test_attach_chapters_rejects_fewer_than_three_chapters():
+def test_attach_chapters_accepts_single_chapter():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = service.create_job("job-001")
+    chapters = make_chapters()[:1]
+
+    updated_job = service.attach_chapters(job, chapters)
+
+    assert updated_job.state == AdaptationState.CHAPTERS_UPLOADED
+    assert updated_job.chapters == chapters
+
+
+def test_attach_chapters_rejects_empty_chapter_list():
     service = AdaptationService(MockAIAnalysisProvider())
     job = service.create_job("job-001")
 
     with pytest.raises(
         AdaptationServiceError,
-        match="At least 3 chapters are required",
+        match="At least 1 chapter is required",
     ):
-        service.attach_chapters(job, make_chapters()[:2])
+        service.attach_chapters(job, [])
 
 
 def test_attach_chapters_rejects_empty_chapter_content():

@@ -4,31 +4,30 @@ from scriptweaver.ai.provider import AIProviderInputError
 from scriptweaver.domain.models import AIAnalysis, Chapter, Character
 
 
-MIN_ANALYSIS_CHAPTERS = 3
-
-
 class MockAIAnalysisProvider:
     """Deterministic AI analysis provider for tests and demos."""
 
     def analyze_chapters(self, chapters: list[Chapter]) -> AIAnalysis:
-        if len(chapters) < MIN_ANALYSIS_CHAPTERS:
+        if not chapters:
             raise AIProviderInputError(
-                f"At least {MIN_ANALYSIS_CHAPTERS} chapters are required for analysis; "
-                f"received {len(chapters)}"
+                "At least 1 chapter is required for analysis"
             )
 
-        first_three_chapters = chapters[:MIN_ANALYSIS_CHAPTERS]
+        for chapter in chapters:
+            if not chapter.content.strip():
+                raise AIProviderInputError(f"{chapter.title} is empty")
+
         return AIAnalysis(
             characters=[
                 Character(id="char_001", name="主角", role="protagonist"),
                 Character(id="char_002", name="关键关系人", role="supporting"),
             ],
             conflicts=[
-                f"主角需要理解《{first_three_chapters[0].title}》中的关键事件，"
+                f"主角需要理解《{chapters[0].title}》中的关键事件，"
                 "但后续章节不断提高代价。"
             ],
             key_events=[
                 f"{chapter.title}: {chapter.content}"
-                for chapter in first_three_chapters
+                for chapter in chapters
             ],
         )
