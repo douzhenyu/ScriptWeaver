@@ -3,7 +3,10 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import replace
 
-from scriptweaver.ai.provider import AIAnalysisProvider
+from scriptweaver.ai.provider import (
+    AIAnalysisProvider,
+    AdaptationPlanProvider,
+)
 from scriptweaver.domain.analysis_validation import validate_analysis
 from scriptweaver.domain.models import (
     AIAnalysis,
@@ -24,8 +27,13 @@ class AdaptationServiceError(ValueError):
 
 
 class AdaptationService:
-    def __init__(self, ai_provider: AIAnalysisProvider) -> None:
+    def __init__(
+        self,
+        ai_provider: AIAnalysisProvider,
+        plan_provider: AdaptationPlanProvider | None = None,
+    ) -> None:
         self._ai_provider = ai_provider
+        self._plan_provider = plan_provider
 
     def create_job(self, job_id: str) -> AdaptationJob:
         return AdaptationJob(id=job_id)
@@ -143,4 +151,30 @@ class AdaptationService:
         return replace(
             job,
             user_confirmations=deepcopy(user_confirmations),
+        )
+
+    def generate_plan(self, job: AdaptationJob) -> AdaptationJob:
+        ensure_transition_allowed(
+            job.state, AdaptationState.PLAN_GENERATED
+        )
+
+        if self._plan_provider is None:
+            raise AdaptationServiceError(
+                "No plan provider configured"
+            )
+
+        if job.confirmed_analysis is None:
+            raise AdaptationServiceError(
+                "No confirmed analysis to generate plan from"
+            )
+
+        plan = self._plan_provider.generate_plan(
+            job.confirmed_analysis,
+            list(job.chapters),
+        )
+
+        return replace(
+            job,
+            state=AdaptationState.PLAN_GENERATED,
+            adaptation_plan=deepcopy(plan),
         )

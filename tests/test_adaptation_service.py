@@ -2,10 +2,14 @@ from dataclasses import replace
 
 import pytest
 
-from scriptweaver.ai.mock_provider import MockAIAnalysisProvider
+from scriptweaver.ai.mock_provider import (
+    MockAIAnalysisProvider,
+    MockPlanProvider,
+)
 from scriptweaver.domain.analysis_validation import AnalysisValidationError
 from scriptweaver.domain.models import (
     AIAnalysis,
+    AdaptationPlan,
     Chapter,
     Character,
     Conflict,
@@ -643,3 +647,159 @@ def test_submit_answer_deep_copies_user_confirmations():
         .selected_option_id
         == "option_001"
     )
+
+
+# ── generate_plan ────────────────────────────────────────────────
+
+
+def make_analysis_confirmed_job(service: AdaptationService):
+    job = service.create_job("job-001")
+    chapters = make_chapters()
+    job = service.attach_chapters(job, chapters)
+    job = service.generate_analysis(job)
+    return service.confirm_analysis(job, job.ai_analysis)
+
+
+class RecordingPlanProvider:
+    def __init__(self) -> None:
+        self.received_analysis: AIAnalysis | None = None
+        self.received_chapters: list[Chapter] | None = None
+        self.plan = AdaptationPlan(
+            target_format="short_drama",
+            structure="3 scenes, linear progression",
+        )
+
+    def generate_plan(
+        self,
+        confirmed_analysis: AIAnalysis,
+        chapters: list[Chapter],
+    ) -> AdaptationPlan:
+        self.received_analysis = confirmed_analysis
+        self.received_chapters = chapters
+        return self.plan
+
+
+class MutatingPlanProvider:
+    def __init__(self) -> None:
+        self.plan = AdaptationPlan(
+            target_format="short_drama",
+            structure="3 scenes",
+        )
+
+    def generate_plan(
+        self,
+        confirmed_analysis: AIAnalysis,
+        chapters: list[Chapter],
+    ) -> AdaptationPlan:
+        chapters.clear()
+        return self.plan
+
+
+def test_generate_plan_advances_state_and_stores_plan():
+    provider = RecordingPlanProvider()
+    service = AdaptationService(
+        MockAIAnalysisProvider(), plan_provider=provider
+    )
+    job = make_analysis_confirmed_job(service)
+
+    updated_job = service.generate_plan(job)
+
+    assert updated_job is not job
+    assert updated_job.state == AdaptationState.PLAN_GENERATED
+    assert updated_job.adaptation_plan is not None
+    assert updated_job.adaptation_plan.target_format == "short_drama"
+    assert updated_job.adaptation_plan == provider.plan
+    assert job.state == AdaptationState.ANALYSIS_CONFIRMED
+    assert job.adaptation_plan is None
+
+
+def test_generate_plan_passes_confirmed_analysis_to_provider():
+    provider = RecordingPlanProvider()
+    service = AdaptationService(
+        MockAIAnalysisProvider(), plan_provider=provider
+    )
+    job = make_analysis_confirmed_job(service)
+
+    service.generate_plan(job)
+
+    assert provider.received_analysis is job.confirmed_analysis
+    assert provider.received_chapters == job.chapters
+
+
+def test_generate_plan_rejects_wrong_state():
+    service = AdaptationService(
+        MockAIAnalysisProvider(), plan_provider=MockPlanProvider()
+    )
+    job = service.create_job("job-001")
+
+    with pytest.raises(WorkflowTransitionError, match="Cannot transition"):
+        service.generate_plan(job)
+
+
+def test_generate_plan_requires_confirmed_analysis():
+    service = AdaptationService(
+        MockAIAnalysisProvider(), plan_provider=MockPlanProvider()
+    )
+    job = make_analysis_confirmed_job(service)
+    # Corrupt the job to simulate missing confirmed analysis
+    job = replace(job, confirmed_analysis=None)
+
+    with pytest.raises(
+        AdaptationServiceError,
+        match="No confirmed analysis to generate plan from",
+    ):
+        service.generate_plan(job)
+
+
+def test_generate_plan_requires_plan_provider():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_confirmed_job(service)
+
+    with pytest.raises(
+        AdaptationServiceError,
+        match="No plan provider configured",
+    ):
+        service.generate_plan(job)
+
+
+def test_generate_plan_deep_copies_provider_plan():
+    service = AdaptationService(
+        MockAIAnalysisProvider(), plan_provider=MutatingPlanProvider()
+    )
+    job = make_analysis_confirmed_job(service)
+
+    updated_job = service.generate_plan(job)
+
+    assert updated_job.adaptation_plan is not None
+    assert updated_job.adaptation_plan.target_format == "short_drama"
+
+
+def test_generate_plan_does_not_mutate_original_job():
+    service = AdaptationService(
+        MockAIAnalysisProvider(), plan_provider=RecordingPlanProvider()
+    )
+    job = make_analysis_confirmed_job(service)
+
+    service.generate_plan(job)
+
+    assert job.adaptation_plan is None
+    assert job.state == AdaptationState.ANALYSIS_CONFIRMED
+
+
+def test_generate_plan_with_mock_provider():
+    service = AdaptationService(
+        MockAIAnalysisProvider(), plan_provider=MockPlanProvider()
+    )
+    job = make_analysis_confirmed_job(service)
+
+    updated_job = service.generate_plan(job)
+
+    assert updated_job.state == AdaptationState.PLAN_GENERATED
+    plan = updated_job.adaptation_plan
+    assert plan is not None
+    assert plan.target_format == "1-3 minute short drama"
+    assert len(plan.scenes) == 3
+    assert plan.scenes[0].scene_order == 1
+    assert len(plan.scenes[0].compression_choices) == 1
+    assert len(plan.scenes[0].review_questions) == 1
+    assert len(plan.review_questions) == 1

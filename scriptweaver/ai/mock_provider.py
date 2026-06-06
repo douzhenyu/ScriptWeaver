@@ -3,12 +3,16 @@ from __future__ import annotations
 from scriptweaver.ai.provider import AIProviderInputError
 from scriptweaver.domain.models import (
     AIAnalysis,
+    AdaptationDecision,
+    AdaptationPlan,
     CandidateScene,
     Chapter,
     Character,
     CharacterRelationship,
     Conflict,
     KeyEvent,
+    PlanReviewQuestion,
+    ScenePlan,
     Theme,
     Uncertainty,
     UncertaintyOption,
@@ -123,6 +127,94 @@ class MockAIAnalysisProvider:
                     ],
                     allow_custom_answer=True,
                     source_chapter_indexes=list(chapter_indexes),
+                )
+            ],
+        )
+
+
+class MockPlanProvider:
+    """Deterministic adaptation plan provider for tests and demos."""
+
+    def generate_plan(
+        self,
+        confirmed_analysis: AIAnalysis,
+        chapters: list[Chapter],
+    ) -> AdaptationPlan:
+        chapter_indexes = [c.index for c in chapters]
+        character_ids = [c.id for c in confirmed_analysis.characters]
+        event_ids = [e.id for e in confirmed_analysis.key_events]
+
+        return AdaptationPlan(
+            target_format="1-3 minute short drama",
+            structure=f"{len(chapters)} scenes, linear narrative",
+            scenes=[
+                ScenePlan(
+                    id=f"scene_{i:03d}",
+                    scene_order=i,
+                    title=chapter.title,
+                    dramatic_purpose=(
+                        f"将{chapter.title}的关键事件转化为可见的戏剧行动。"
+                    ),
+                    character_ids=list(character_ids),
+                    source_chapter_indexes=[chapter.index],
+                    retained_event_ids=[
+                        eid
+                        for eid in event_ids
+                        if chapter.index in (
+                            e.source_chapter_indexes
+                            for e in confirmed_analysis.key_events
+                            if e.id == eid
+                        )
+                    ]
+                    or [event_ids[i - 1]]
+                    if event_ids
+                    else [],
+                    source_candidate_scene_ids=[
+                        f"candidate_scene_{i:03d}"
+                    ],
+                    compression_choices=[
+                        AdaptationDecision(
+                            id=f"compression_{i:03d}",
+                            description=(
+                                f"将{chapter.title}的时间线压缩为单一场"
+                                "景。"
+                            ),
+                            reason="短剧需要在有限时间内展现核心冲突。",
+                            source_event_ids=(
+                                [event_ids[i - 1]]
+                                if event_ids
+                                else []
+                            ),
+                        )
+                    ],
+                    merge_choices=[],
+                    rewrite_choices=[],
+                    review_questions=[
+                        PlanReviewQuestion(
+                            id=f"review_{i:03d}",
+                            question=(
+                                f"场景 {i} 的{chapter.title}改编是否"
+                                "保留了核心冲突？"
+                            ),
+                            context=(
+                                f"原始章节包含{len(chapter.content)}"
+                                "字内容。"
+                            ),
+                            related_scene_ids=[f"scene_{i:03d}"],
+                        )
+                    ],
+                )
+                for i, chapter in enumerate(chapters, start=1)
+            ],
+            review_questions=[
+                PlanReviewQuestion(
+                    id="review_overall",
+                    question="整体结构是否符合短剧节奏要求？",
+                    context=f"共 {len(chapters)} 个章节改编为场景。",
+                    related_scene_ids=[
+                        f"scene_{i:03d}"
+                        for i in range(1, len(chapters) + 1)
+                    ],
                 )
             ],
         )
