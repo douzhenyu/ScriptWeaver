@@ -100,17 +100,115 @@ Fields:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `characters` | list | yes | Raw AI character extraction. |
-| `relationships` | list | no | Raw AI relationship extraction. |
-| `conflicts` | list | yes | Raw AI conflict extraction. |
-| `key_events` | list | yes | Raw AI event extraction. |
-| `locations` | list | no | Raw AI location extraction. |
-| `candidate_scenes` | list | yes | AI-suggested scene candidates. |
-| `uncertainties` | list | no | AI-flagged ambiguity or missing context. |
+| `characters` | list | yes | AI character interpretations. May be empty. |
+| `relationships` | list | yes | AI-inferred character relationships. May be empty. |
+| `key_events` | list | yes | AI-extracted story events. May be empty. |
+| `conflicts` | list | yes | AI-inferred dramatic conflicts. May be empty. |
+| `themes` | list | yes | AI-inferred thematic statements. May be empty. |
+| `candidate_scenes` | list | yes | AI-suggested material with scene potential. May be empty. |
+| `uncertainties` | list | yes | Questions that require author confirmation. May be empty. |
+
+All seven fields are required, even when their value is an empty list. This distinguishes a completed analysis with no findings from an omitted or incomplete analysis stage.
+
+Each `characters` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable character identifier. |
+| `name` | string | yes | Character name or AI-generated label. |
+| `role` | string | yes | Dramatic role, such as `protagonist` or `supporting`. |
+| `description` | string | yes | AI interpretation of the character. |
+| `goal` | string | yes | What the character is trying to achieve. |
+| `motivation` | string | yes | Why the character pursues the goal. |
 
 Design reason:
 
-This section makes the AI contribution reviewable instead of hiding it inside the final script.
+Character analysis must expose interpretation, not only extracted names. Goals and motivations directly influence conflict, scene purpose, and later adaptation decisions.
+
+Each `relationships` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable relationship identifier. |
+| `source_character_id` | string | yes | First referenced character ID. |
+| `target_character_id` | string | yes | Second referenced character ID. |
+| `description` | string | yes | Nature and tension of the relationship. |
+| `source_chapter_indexes` | list | yes | Source chapter indexes supporting the interpretation. May be empty. |
+
+Design reason:
+
+Relationships are independent analysis items so authors can confirm or edit them without duplicating relationship data inside both character objects.
+
+Each `key_events` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable event identifier. |
+| `summary` | string | yes | Event summary. |
+| `character_ids` | list | yes | Character IDs involved in the event. May be empty. |
+| `source_chapter_indexes` | list | yes | Source chapter indexes containing the event. May be empty. |
+
+Design reason:
+
+Stable event IDs let user confirmations and adaptation plans identify which plot points must be preserved.
+
+Each `conflicts` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable conflict identifier. |
+| `description` | string | yes | Opposing goals or forces. |
+| `stakes` | string | yes | Consequences if the conflict is not resolved. |
+| `character_ids` | list | yes | Character IDs involved in the conflict. May be empty. |
+| `source_chapter_indexes` | list | yes | Source chapter indexes supporting the interpretation. May be empty. |
+
+Design reason:
+
+Separating stakes from the conflict description makes the dramatic importance of a conflict explicit and reviewable.
+
+Each `themes` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable theme identifier. |
+| `statement` | string | yes | AI-inferred thematic statement. |
+| `source_chapter_indexes` | list | yes | Source chapter indexes supporting the theme. May be empty. |
+
+Design reason:
+
+Themes are explicit analysis items so authors can later decide which ideas the adaptation should preserve or emphasize.
+
+Each `candidate_scenes` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable candidate-scene identifier. |
+| `title` | string | yes | Human-readable candidate title. |
+| `summary` | string | yes | Source material represented by the candidate. |
+| `dramatic_purpose` | string | yes | Why this material may work as a scene. |
+| `location` | string | yes | AI-inferred location or explicit uncertainty label. |
+| `time_hint` | string | yes | AI-inferred time cue or explicit uncertainty label. |
+| `character_ids` | list | yes | Character IDs likely involved. May be empty. |
+| `source_chapter_indexes` | list | yes | Source chapter indexes represented by the candidate. May be empty. |
+
+Design reason:
+
+Candidate scenes identify material with dramatic potential. They are suggestions, not ordered final screenplay scenes or confirmed adaptation decisions.
+
+Each `uncertainties` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable uncertainty identifier. |
+| `question` | string | yes | Question requiring author confirmation. |
+| `context` | string | yes | Why the answer matters to the adaptation. |
+| `source_chapter_indexes` | list | yes | Source chapter indexes related to the question. May be empty. |
+
+Design reason:
+
+Uncertainty remains visible so AI does not silently convert ambiguous interpretations into creative facts.
+
+The `ai_analysis` field names exactly match the backend's `AIAnalysis.to_dict()` output. This keeps the YAML readable while avoiding a separate export mapping layer.
 
 ### `user_confirmations`
 
@@ -252,51 +350,74 @@ ai_analysis:
     - id: "char_001"
       name: "林照"
       role: "protagonist"
-      goal: "查明父亲失踪真相"
+      description: "执着追查父亲失踪真相的年轻记者。"
+      goal: "查明父亲失踪和旧案之间的联系。"
+      motivation: "证明父亲并未背叛家人。"
     - id: "char_002"
       name: "沈微"
-      role: "ally_with_secret"
-      goal: "阻止真相伤害无辜者"
+      role: "supporting"
+      description: "掌握旧案线索、但担心真相造成伤害的协助者。"
+      goal: "控制调查范围并保护无辜者。"
+      motivation: "避免旧案相关人员再次受到伤害。"
   relationships:
-    - from: "char_001"
-      to: "char_002"
-      type: "allies_with_hidden_conflict"
-      description: "两人目标相近，但对公开真相的代价判断不同。"
+    - id: "relationship_001"
+      source_character_id: "char_001"
+      target_character_id: "char_002"
+      description: "两人共同调查，但对是否公开真相存在分歧。"
+      source_chapter_indexes: [1, 2, 3]
+  key_events:
+    - id: "event_001"
+      summary: "林照收到父亲留下的密信。"
+      character_ids: ["char_001"]
+      source_chapter_indexes: [1]
+    - id: "event_002"
+      summary: "沈微出现并阻止林照公开密信。"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [2]
+    - id: "event_003"
+      summary: "林照和沈微发现密信指向旧案。"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [3]
   conflicts:
     - id: "conflict_001"
       description: "林照想公开真相，沈微担心真相会伤害无辜者。"
-  key_events:
-    - id: "event_001"
-      source_chapter: 1
-      summary: "林照收到父亲留下的密信。"
-    - id: "event_002"
-      source_chapter: 2
-      summary: "沈微出现并阻止林照公开密信。"
-    - id: "event_003"
-      source_chapter: 3
-      summary: "林照和沈微发现密信指向旧案。"
-  locations:
-    - id: "loc_001"
-      name: "茶馆"
-    - id: "loc_002"
-      name: "巷口"
-    - id: "loc_003"
-      name: "旧档案室"
+      stakes: "错误选择可能让旧案相关人员再次陷入危险。"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [1, 2, 3]
+  themes:
+    - id: "theme_001"
+      statement: "追求真相需要面对公开真相的代价。"
+      source_chapter_indexes: [1, 2, 3]
   candidate_scenes:
     - id: "candidate_scene_001"
-      source_chapters: [1]
+      title: "密信出现"
+      summary: "林照收到父亲留下的密信。"
+      dramatic_purpose: "引出调查目标和主线悬念。"
       location: "茶馆"
-      dramatic_purpose: "引出密信和主线悬念。"
+      time_hint: "夜"
+      character_ids: ["char_001"]
+      source_chapter_indexes: [1]
     - id: "candidate_scene_002"
-      source_chapters: [2]
-      location: "巷口"
+      title: "巷口阻拦"
+      summary: "沈微阻止林照公开密信。"
       dramatic_purpose: "让沈微介入并制造信任危机。"
+      location: "巷口"
+      time_hint: "夜"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [2]
     - id: "candidate_scene_003"
-      source_chapters: [3]
-      location: "旧档案室"
+      title: "旧案线索"
+      summary: "两人发现密信指向旧案。"
       dramatic_purpose: "揭示密信与旧案的关联。"
+      location: "旧档案室"
+      time_hint: "凌晨"
+      character_ids: ["char_001", "char_002"]
+      source_chapter_indexes: [3]
   uncertainties:
-    - "沈微是否提前知道密信内容需要作者确认。"
+    - id: "uncertainty_001"
+      question: "沈微是否提前知道密信内容？"
+      context: "答案会影响沈微阻止林照的动机和后续冲突。"
+      source_chapter_indexes: [1, 2]
 user_confirmations:
   accepted_character_ids: ["char_001", "char_002"]
   rejected_character_ids: []
@@ -396,6 +517,13 @@ Future implementations should validate:
 - `metadata`, `source`, `ai_analysis`, `user_confirmations`, `adaptation_plan`, `screenplay`, and `revision_notes` are required top-level sections.
 - `source.chapter_count` is at least 1.
 - `source.chapters` length matches `source.chapter_count`.
+- All seven `ai_analysis` list fields exist, even when a list is empty.
+- Every analysis item contains all fields defined for its category.
+- Analysis item IDs are unique within their category.
+- `source_character_id`, `target_character_id`, and `character_ids` reference existing `ai_analysis.characters` IDs.
+- `source_chapter_indexes` reference existing `source.chapters` indexes.
+- Candidate scenes are suggestions and do not need to match or order final screenplay scenes.
+- Uncertainty questions remain available for user confirmation.
 - `screenplay.scenes` is not empty.
 - Each scene has a heading and at least one beat.
 - Dialogue beats include `character`.
