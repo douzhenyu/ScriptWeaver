@@ -90,10 +90,23 @@ class CandidateScene:
 
 
 @dataclass(frozen=True)
+class UncertaintyOption:
+    id: str
+    label: str
+    description: str
+    impact: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class Uncertainty:
     id: str
     question: str
     context: str
+    options: list[UncertaintyOption] = field(default_factory=list)
+    allow_custom_answer: bool = True
     source_chapter_indexes: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -125,9 +138,22 @@ class AIAnalysis:
 
 
 @dataclass(frozen=True)
+class UncertaintyResolution:
+    uncertainty_id: str
+    selected_option_id: str | None = None
+    custom_answer: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class UserConfirmations:
     accepted_character_ids: list[str] = field(default_factory=list)
     required_plot_points: list[str] = field(default_factory=list)
+    uncertainty_resolutions: list[UncertaintyResolution] = field(
+        default_factory=list
+    )
     notes: str = ""
 
     def to_dict(self) -> dict[str, Any]:

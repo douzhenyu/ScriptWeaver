@@ -4,6 +4,10 @@ from collections.abc import Iterable
 from typing import Any
 
 from scriptweaver.domain.models import AIAnalysis
+from scriptweaver.domain.uncertainty_validation import (
+    UncertaintyValidationError,
+    validate_uncertainties,
+)
 
 
 class AnalysisValidationError(ValueError):
@@ -107,3 +111,8 @@ def validate_analysis(
                 item.source_chapter_indexes,
                 chapter_indexes,
             )
+
+    try:
+        validate_uncertainties(analysis.uncertainties)
+    except UncertaintyValidationError as error:
+        raise AnalysisValidationError(str(error)) from error

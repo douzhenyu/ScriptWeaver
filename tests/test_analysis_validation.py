@@ -3,6 +3,9 @@ from dataclasses import replace
 import pytest
 
 from scriptweaver.domain import AnalysisValidationError, validate_analysis
+from scriptweaver.domain.uncertainty_validation import (
+    UncertaintyValidationError,
+)
 from scriptweaver.domain.models import (
     AIAnalysis,
     CandidateScene,
@@ -195,5 +198,46 @@ def test_validate_analysis_rejects_unknown_chapter_references(
     with pytest.raises(
         AnalysisValidationError,
         match=rf"{label} {item.id} references unknown chapter index: 99",
+    ):
+        validate_analysis(invalid_analysis, {1, 2})
+
+
+def test_validate_analysis_rejects_unanswerable_uncertainty():
+    analysis = make_valid_analysis()
+    invalid_uncertainty = replace(
+        analysis.uncertainties[0],
+        options=[],
+        allow_custom_answer=False,
+    )
+    invalid_analysis = replace(
+        analysis,
+        uncertainties=[invalid_uncertainty],
+    )
+
+    with pytest.raises(
+        AnalysisValidationError,
+        match="must allow a custom answer when it has no options",
+    ) as exc_info:
+        validate_analysis(invalid_analysis, {1, 2})
+
+    assert isinstance(exc_info.value.__cause__, UncertaintyValidationError)
+
+
+def test_validate_analysis_reports_chapter_reference_before_option_structure():
+    analysis = make_valid_analysis()
+    invalid_uncertainty = replace(
+        analysis.uncertainties[0],
+        options=[],
+        allow_custom_answer=False,
+        source_chapter_indexes=[99],
+    )
+    invalid_analysis = replace(
+        analysis,
+        uncertainties=[invalid_uncertainty],
+    )
+
+    with pytest.raises(
+        AnalysisValidationError,
+        match="references unknown chapter index: 99",
     ):
         validate_analysis(invalid_analysis, {1, 2})

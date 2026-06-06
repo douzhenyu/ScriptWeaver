@@ -14,6 +14,8 @@ from scriptweaver.domain.models import (
     ScreenplayDraft,
     Theme,
     Uncertainty,
+    UncertaintyOption,
+    UncertaintyResolution,
     UserConfirmations,
 )
 from scriptweaver.domain.workflow import AdaptationState
@@ -137,6 +139,8 @@ def test_structured_analysis_models_serialize_to_plain_dicts():
         "id": "uncertainty_001",
         "question": "沈微是否提前知道密信内容？",
         "context": "答案会影响沈微阻止林照的动机。",
+        "options": [],
+        "allow_custom_answer": True,
         "source_chapter_indexes": [1, 2],
     }
 
@@ -228,6 +232,12 @@ def test_adaptation_job_serializes_nested_workflow_data():
         user_confirmations=UserConfirmations(
             accepted_character_ids=["char_001"],
             required_plot_points=["密信必须保留"],
+            uncertainty_resolutions=[
+                UncertaintyResolution(
+                    uncertainty_id="uncertainty_001",
+                    custom_answer="沈微只知道密信存在。",
+                )
+            ],
             notes="强化不信任。",
         ),
         adaptation_plan=AdaptationPlan(
@@ -331,6 +341,8 @@ def test_adaptation_job_serializes_nested_workflow_data():
                     "id": "uncertainty_001",
                     "question": "沈微是否提前知道密信内容？",
                     "context": "答案会影响沈微的动机。",
+                    "options": [],
+                    "allow_custom_answer": True,
                     "source_chapter_indexes": [1, 2],
                 }
             ],
@@ -354,6 +366,13 @@ def test_adaptation_job_serializes_nested_workflow_data():
         "user_confirmations": {
             "accepted_character_ids": ["char_001"],
             "required_plot_points": ["密信必须保留"],
+            "uncertainty_resolutions": [
+                {
+                    "uncertainty_id": "uncertainty_001",
+                    "selected_option_id": None,
+                    "custom_answer": "沈微只知道密信存在。",
+                }
+            ],
             "notes": "强化不信任。",
         },
         "adaptation_plan": {
@@ -593,3 +612,112 @@ def test_structured_adaptation_plan_models_are_public_domain_exports():
     assert ExportedAdaptationDecision is AdaptationDecision
     assert ExportedPlanReviewQuestion is PlanReviewQuestion
     assert ExportedScenePlan is ScenePlan
+
+
+def test_uncertainty_options_and_resolutions_serialize_to_plain_dicts():
+    option = UncertaintyOption(
+        id="option_001",
+        label="提前知情",
+        description="沈微一直知道密信内容。",
+        impact="强化隐瞒与信任冲突。",
+    )
+    alternative_option = UncertaintyOption(
+        id="option_002",
+        label="刚刚得知",
+        description="沈微与林照同时得知密信内容。",
+        impact="强化共同调查关系。",
+    )
+    uncertainty = Uncertainty(
+        id="uncertainty_001",
+        question="沈微是否提前知道密信？",
+        context="答案影响人物动机。",
+        options=[option, alternative_option],
+        allow_custom_answer=True,
+        source_chapter_indexes=[1, 2],
+    )
+    selected_resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="option_001",
+    )
+    custom_resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_002",
+        custom_answer="沈微只知道密信存在，不知道内容。",
+    )
+    confirmations = UserConfirmations(
+        uncertainty_resolutions=[
+            selected_resolution,
+            custom_resolution,
+        ]
+    )
+
+    assert option.to_dict() == {
+        "id": "option_001",
+        "label": "提前知情",
+        "description": "沈微一直知道密信内容。",
+        "impact": "强化隐瞒与信任冲突。",
+    }
+    assert uncertainty.to_dict() == {
+        "id": "uncertainty_001",
+        "question": "沈微是否提前知道密信？",
+        "context": "答案影响人物动机。",
+        "options": [option.to_dict(), alternative_option.to_dict()],
+        "allow_custom_answer": True,
+        "source_chapter_indexes": [1, 2],
+    }
+    assert selected_resolution.to_dict() == {
+        "uncertainty_id": "uncertainty_001",
+        "selected_option_id": "option_001",
+        "custom_answer": None,
+    }
+    assert custom_resolution.to_dict() == {
+        "uncertainty_id": "uncertainty_002",
+        "selected_option_id": None,
+        "custom_answer": "沈微只知道密信存在，不知道内容。",
+    }
+    assert confirmations.to_dict()["uncertainty_resolutions"] == [
+        selected_resolution.to_dict(),
+        custom_resolution.to_dict(),
+    ]
+
+
+def test_uncertainty_option_and_resolution_defaults_are_independent():
+    first_uncertainty = Uncertainty(
+        id="uncertainty_001",
+        question="问题一",
+        context="上下文一",
+    )
+    second_uncertainty = Uncertainty(
+        id="uncertainty_002",
+        question="问题二",
+        context="上下文二",
+    )
+    first_confirmations = UserConfirmations()
+    second_confirmations = UserConfirmations()
+
+    first_uncertainty.options.append(
+        UncertaintyOption(
+            id="option_001",
+            label="方案一",
+            description="描述一",
+            impact="影响一",
+        )
+    )
+    first_confirmations.uncertainty_resolutions.append(
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            custom_answer="自定义答案",
+        )
+    )
+
+    assert second_uncertainty.options == []
+    assert second_confirmations.uncertainty_resolutions == []
+
+
+def test_uncertainty_models_are_public_domain_exports():
+    from scriptweaver.domain import (
+        UncertaintyOption as ExportedUncertaintyOption,
+        UncertaintyResolution as ExportedUncertaintyResolution,
+    )
+
+    assert ExportedUncertaintyOption is UncertaintyOption
+    assert ExportedUncertaintyResolution is UncertaintyResolution
