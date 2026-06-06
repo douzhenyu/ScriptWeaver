@@ -10,6 +10,11 @@ from scriptweaver.domain.models import (
     AdaptationJob,
     Chapter,
     Uncertainty,
+    UncertaintyResolution,
+    UserConfirmations,
+)
+from scriptweaver.domain.uncertainty_validation import (
+    validate_uncertainty_resolutions,
 )
 from scriptweaver.domain.workflow import AdaptationState, ensure_transition_allowed
 
@@ -97,3 +102,45 @@ class AdaptationService:
                 return uncertainty
 
         return None
+
+    def submit_uncertainty_answer(
+        self,
+        job: AdaptationJob,
+        resolution: UncertaintyResolution,
+    ) -> AdaptationJob:
+        if job.state != AdaptationState.ANALYSIS_GENERATED:
+            raise AdaptationServiceError(
+                "submit_uncertainty_answer requires "
+                "ANALYSIS_GENERATED state"
+            )
+        if job.ai_analysis is None:
+            raise AdaptationServiceError(
+                "No AI analysis to resolve uncertainties against"
+            )
+
+        existing_resolutions: list[UncertaintyResolution] = []
+        if job.user_confirmations is not None:
+            existing_resolutions = list(
+                job.user_confirmations.uncertainty_resolutions
+            )
+
+        all_resolutions = existing_resolutions + [resolution]
+        validate_uncertainty_resolutions(
+            job.ai_analysis.uncertainties,
+            all_resolutions,
+        )
+
+        if job.user_confirmations is None:
+            user_confirmations = UserConfirmations(
+                uncertainty_resolutions=[resolution],
+            )
+        else:
+            user_confirmations = replace(
+                job.user_confirmations,
+                uncertainty_resolutions=all_resolutions,
+            )
+
+        return replace(
+            job,
+            user_confirmations=deepcopy(user_confirmations),
+        )

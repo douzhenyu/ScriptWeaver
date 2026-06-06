@@ -15,6 +15,9 @@ from scriptweaver.domain.models import (
     UncertaintyResolution,
     UserConfirmations,
 )
+from scriptweaver.domain.uncertainty_validation import (
+    UncertaintyValidationError,
+)
 from scriptweaver.domain.workflow import AdaptationState, WorkflowTransitionError
 from scriptweaver.services.adaptation_service import (
     AdaptationService,
@@ -417,3 +420,226 @@ def test_get_next_unanswered_rejects_wrong_state():
         match="get_next_unanswered_uncertainty requires ANALYSIS_GENERATED",
     ):
         service.get_next_unanswered_uncertainty(job)
+
+
+# ── submit_uncertainty_answer ────────────────────────────────────
+
+
+def test_submit_answer_appends_resolution():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="option_001",
+    )
+
+    updated_job = service.submit_uncertainty_answer(job, resolution)
+
+    assert updated_job is not job
+    assert updated_job.user_confirmations is not None
+    assert (
+        updated_job.user_confirmations.uncertainty_resolutions
+        == [resolution]
+    )
+    assert updated_job.state == AdaptationState.ANALYSIS_GENERATED
+    assert job.user_confirmations is None
+
+
+def test_submit_answer_auto_initializes_user_confirmations():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        custom_answer="自定义答案。",
+    )
+
+    updated_job = service.submit_uncertainty_answer(job, resolution)
+
+    assert updated_job.user_confirmations is not None
+    assert (
+        updated_job.user_confirmations.uncertainty_resolutions
+        == [resolution]
+    )
+
+
+def test_submit_answer_preserves_existing_resolutions():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    first = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="option_001",
+    )
+    job = service.submit_uncertainty_answer(job, first)
+    second = UncertaintyResolution(
+        uncertainty_id="uncertainty_002",
+        custom_answer="新的答案。",
+    )
+    uncertainties = list(job.ai_analysis.uncertainties) + [
+        Uncertainty(
+            id="uncertainty_002",
+            question="第二个问题",
+            context="更多上下文。",
+            options=[
+                UncertaintyOption(
+                    id="opt_a", label="A", description="dA",
+                    impact="iA",
+                ),
+                UncertaintyOption(
+                    id="opt_b", label="B", description="dB",
+                    impact="iB",
+                ),
+            ],
+            allow_custom_answer=True,
+            source_chapter_indexes=[1],
+        )
+    ]
+    job = replace(
+        job,
+        ai_analysis=replace(job.ai_analysis, uncertainties=uncertainties),
+    )
+
+    updated_job = service.submit_uncertainty_answer(job, second)
+
+    assert (
+        updated_job.user_confirmations.uncertainty_resolutions
+        == [first, second]
+    )
+
+
+def test_submit_answer_rejects_unknown_uncertainty():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="nonexistent",
+        selected_option_id="option_001",
+    )
+
+    with pytest.raises(
+        UncertaintyValidationError,
+        match="references unknown uncertainty",
+    ):
+        service.submit_uncertainty_answer(job, resolution)
+
+
+def test_submit_answer_rejects_duplicate_resolution():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="option_001",
+    )
+    job = service.submit_uncertainty_answer(job, resolution)
+
+    with pytest.raises(
+        UncertaintyValidationError,
+        match="Duplicate resolution",
+    ):
+        service.submit_uncertainty_answer(job, resolution)
+
+
+def test_submit_answer_rejects_invalid_option_id():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="nonexistent_option",
+    )
+
+    with pytest.raises(
+        UncertaintyValidationError,
+        match="references unknown option",
+    ):
+        service.submit_uncertainty_answer(job, resolution)
+
+
+def test_submit_answer_rejects_custom_answer_when_disallowed():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    # Modify the uncertainty to disallow custom answers
+    modified_uncertainties = [
+        replace(
+            job.ai_analysis.uncertainties[0],
+            allow_custom_answer=False,
+        )
+    ]
+    job = replace(
+        job,
+        ai_analysis=replace(
+            job.ai_analysis,
+            uncertainties=modified_uncertainties,
+        ),
+    )
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        custom_answer="不允许的自定义答案。",
+    )
+
+    with pytest.raises(
+        UncertaintyValidationError,
+        match="does not allow a custom answer",
+    ):
+        service.submit_uncertainty_answer(job, resolution)
+
+
+def test_submit_answer_rejects_both_option_and_custom():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="option_001",
+        custom_answer="多余的答案。",
+    )
+
+    with pytest.raises(
+        UncertaintyValidationError,
+        match="exactly one",
+    ):
+        service.submit_uncertainty_answer(job, resolution)
+
+
+def test_submit_answer_rejects_neither_option_nor_custom():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+    )
+
+    with pytest.raises(
+        UncertaintyValidationError,
+        match="exactly one",
+    ):
+        service.submit_uncertainty_answer(job, resolution)
+
+
+def test_submit_answer_rejects_wrong_state():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = service.create_job("job-001")
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="option_001",
+    )
+
+    with pytest.raises(
+        AdaptationServiceError,
+        match="submit_uncertainty_answer requires ANALYSIS_GENERATED",
+    ):
+        service.submit_uncertainty_answer(job, resolution)
+
+
+def test_submit_answer_deep_copies_user_confirmations():
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    resolution = UncertaintyResolution(
+        uncertainty_id="uncertainty_001",
+        selected_option_id="option_001",
+    )
+
+    updated_job = service.submit_uncertainty_answer(job, resolution)
+    # Mutate the original resolution — should not affect the stored one
+    object.__setattr__(resolution, "selected_option_id", "option_002")
+
+    assert (
+        updated_job.user_confirmations.uncertainty_resolutions[0]
+        .selected_option_id
+        == "option_001"
+    )
