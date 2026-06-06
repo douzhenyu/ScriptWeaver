@@ -3,6 +3,7 @@ from scriptweaver.domain.models import (
     AdaptationJob,
     AdaptationPlan,
     AIAnalysis,
+    Beat,
     CandidateScene,
     Chapter,
     Character,
@@ -10,8 +11,10 @@ from scriptweaver.domain.models import (
     Conflict,
     KeyEvent,
     PlanReviewQuestion,
+    SceneHeading,
     ScenePlan,
     ScreenplayDraft,
+    ScreenplayScene,
     Theme,
     Uncertainty,
     UncertaintyOption,
@@ -265,7 +268,29 @@ def test_adaptation_job_serializes_nested_workflow_data():
             ],
         ),
         screenplay_draft=ScreenplayDraft(
-            scene_ids=["scene_001", "scene_002", "scene_003"],
+            scenes=[
+                ScreenplayScene(
+                    id="scene_001",
+                    heading=SceneHeading(
+                        location="茶馆", time="夜", interior_exterior="INT"
+                    ),
+                    beats=[Beat(type="action", text="开场。")],
+                ),
+                ScreenplayScene(
+                    id="scene_002",
+                    heading=SceneHeading(
+                        location="街道", time="日", interior_exterior="EXT"
+                    ),
+                    beats=[Beat(type="action", text="发展。")],
+                ),
+                ScreenplayScene(
+                    id="scene_003",
+                    heading=SceneHeading(
+                        location="书房", time="夜", interior_exterior="INT"
+                    ),
+                    beats=[Beat(type="action", text="高潮。")],
+                ),
+            ],
             revision_notes=["沈微动机需要作者确认。"],
         ),
     )
@@ -404,7 +429,59 @@ def test_adaptation_job_serializes_nested_workflow_data():
             ],
         },
         "screenplay_draft": {
-            "scene_ids": ["scene_001", "scene_002", "scene_003"],
+            "scenes": [
+                {
+                    "id": "scene_001",
+                    "heading": {
+                        "location": "茶馆",
+                        "time": "夜",
+                        "interior_exterior": "INT",
+                    },
+                    "source_chapter_indexes": [],
+                    "character_ids": [],
+                    "beats": [
+                        {
+                            "type": "action",
+                            "text": "开场。",
+                            "character_id": None,
+                        },
+                    ],
+                },
+                {
+                    "id": "scene_002",
+                    "heading": {
+                        "location": "街道",
+                        "time": "日",
+                        "interior_exterior": "EXT",
+                    },
+                    "source_chapter_indexes": [],
+                    "character_ids": [],
+                    "beats": [
+                        {
+                            "type": "action",
+                            "text": "发展。",
+                            "character_id": None,
+                        },
+                    ],
+                },
+                {
+                    "id": "scene_003",
+                    "heading": {
+                        "location": "书房",
+                        "time": "夜",
+                        "interior_exterior": "INT",
+                    },
+                    "source_chapter_indexes": [],
+                    "character_ids": [],
+                    "beats": [
+                        {
+                            "type": "action",
+                            "text": "高潮。",
+                            "character_id": None,
+                        },
+                    ],
+                },
+            ],
             "revision_notes": ["沈微动机需要作者确认。"],
         },
     }
@@ -745,3 +822,154 @@ def test_uncertainty_models_are_public_domain_exports():
 
     assert ExportedUncertaintyOption is UncertaintyOption
     assert ExportedUncertaintyResolution is UncertaintyResolution
+
+
+# ── Screenplay models ─────────────────────────────────────────────
+
+
+def test_scene_heading_stores_location_time_and_int_ext():
+    from scriptweaver.domain.models import SceneHeading
+
+    heading = SceneHeading(
+        location="茶馆",
+        time="夜",
+        interior_exterior="INT",
+    )
+
+    assert heading.location == "茶馆"
+    assert heading.time == "夜"
+    assert heading.interior_exterior == "INT"
+
+
+def test_scene_heading_to_dict():
+    from scriptweaver.domain.models import SceneHeading
+
+    data = SceneHeading(
+        location="茶馆", time="夜", interior_exterior="INT"
+    ).to_dict()
+
+    assert data == {
+        "location": "茶馆",
+        "time": "夜",
+        "interior_exterior": "INT",
+    }
+
+
+def test_beat_action_stores_type_and_text():
+    from scriptweaver.domain.models import Beat
+
+    beat = Beat(type="action", text="林照拆开密信。")
+
+    assert beat.type == "action"
+    assert beat.text == "林照拆开密信。"
+    assert beat.character_id is None
+
+
+def test_beat_dialogue_stores_character_id():
+    from scriptweaver.domain.models import Beat
+
+    beat = Beat(
+        type="dialogue",
+        text="这不是父亲的笔迹。",
+        character_id="char_001",
+    )
+
+    assert beat.character_id == "char_001"
+
+
+def test_beat_to_dict():
+    from scriptweaver.domain.models import Beat
+
+    data = Beat(
+        type="dialogue",
+        text="你好。",
+        character_id="char_001",
+    ).to_dict()
+
+    assert data == {
+        "type": "dialogue",
+        "text": "你好。",
+        "character_id": "char_001",
+    }
+
+
+def test_screenplay_scene_stores_heading_characters_and_beats():
+    from scriptweaver.domain.models import Beat, SceneHeading, ScreenplayScene
+
+    scene = ScreenplayScene(
+        id="scene_001",
+        heading=SceneHeading(
+            location="茶馆", time="夜", interior_exterior="INT"
+        ),
+        source_chapter_indexes=[1],
+        character_ids=["char_001"],
+        beats=[
+            Beat(type="action", text="林照拆开密信。"),
+            Beat(
+                type="dialogue",
+                text="这不是父亲的笔迹。",
+                character_id="char_001",
+            ),
+        ],
+    )
+
+    assert scene.id == "scene_001"
+    assert scene.heading.location == "茶馆"
+    assert len(scene.beats) == 2
+    assert scene.beats[0].type == "action"
+
+
+def test_screenplay_scene_to_dict():
+    from scriptweaver.domain.models import Beat, SceneHeading, ScreenplayScene
+
+    scene = ScreenplayScene(
+        id="scene_001",
+        heading=SceneHeading(
+            location="茶馆", time="夜", interior_exterior="INT"
+        ),
+        source_chapter_indexes=[1],
+        character_ids=["char_001"],
+        beats=[
+            Beat(type="action", text="林照拆开密信。"),
+        ],
+    )
+
+    data = scene.to_dict()
+
+    assert data["id"] == "scene_001"
+    assert data["heading"]["location"] == "茶馆"
+    assert len(data["beats"]) == 1
+    assert data["beats"][0]["type"] == "action"
+
+
+def test_screenplay_draft_uses_scenes_not_scene_ids():
+    from scriptweaver.domain.models import (
+        Beat,
+        SceneHeading,
+        ScreenplayDraft,
+        ScreenplayScene,
+    )
+
+    draft = ScreenplayDraft(
+        scenes=[
+            ScreenplayScene(
+                id="scene_001",
+                heading=SceneHeading(
+                    location="茶馆", time="夜", interior_exterior="INT"
+                ),
+                beats=[
+                    Beat(type="action", text="开场。"),
+                    Beat(
+                        type="dialogue",
+                        text="开始吧。",
+                        character_id="char_001",
+                    ),
+                ],
+            ),
+        ],
+        revision_notes=["需要审查。"],
+    )
+
+    assert len(draft.scenes) == 1
+    assert draft.scenes[0].id == "scene_001"
+    assert len(draft.revision_notes) == 1

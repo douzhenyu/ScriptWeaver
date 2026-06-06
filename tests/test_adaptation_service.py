@@ -1130,8 +1130,29 @@ class RecordingScreenplayProvider:
     def __init__(self) -> None:
         self.received_plan: AdaptationPlan | None = None
         self.received_chapters: list[Chapter] | None = None
+        from scriptweaver.domain.models import Beat, SceneHeading, ScreenplayScene
+
         self.draft = ScreenplayDraft(
-            scene_ids=["scene_001", "scene_002"],
+            scenes=[
+                ScreenplayScene(
+                    id="scene_001",
+                    heading=SceneHeading(
+                        location="茶馆", time="夜", interior_exterior="INT"
+                    ),
+                    beats=[
+                        Beat(type="action", text="开场。"),
+                    ],
+                ),
+                ScreenplayScene(
+                    id="scene_002",
+                    heading=SceneHeading(
+                        location="街道", time="日", interior_exterior="EXT"
+                    ),
+                    beats=[
+                        Beat(type="action", text="过渡。"),
+                    ],
+                ),
+            ],
             revision_notes=["审查节奏。"],
         )
 
@@ -1158,10 +1179,8 @@ def test_generate_screenplay_advances_state_and_stores_draft():
     assert updated_job is not job
     assert updated_job.state == AdaptationState.SCREENPLAY_GENERATED
     assert updated_job.screenplay_draft is not None
-    assert (
-        updated_job.screenplay_draft.scene_ids
-        == ["scene_001", "scene_002"]
-    )
+    scene_ids = [s.id for s in updated_job.screenplay_draft.scenes]
+    assert scene_ids == ["scene_001", "scene_002"]
     assert updated_job.screenplay_draft == provider.draft
     assert job.state == AdaptationState.PLAN_CONFIRMED
     assert job.screenplay_draft is None
@@ -1212,13 +1231,11 @@ def test_generate_screenplay_deep_copies_provider_draft():
     job = make_plan_confirmed_job(service)
 
     updated_job = service.generate_screenplay(job)
-    provider.draft.scene_ids.clear()
+    provider.draft.scenes.clear()
     provider.draft.revision_notes.clear()
 
-    assert (
-        updated_job.screenplay_draft.scene_ids
-        == ["scene_001", "scene_002"]
-    )
+    scene_ids = [s.id for s in updated_job.screenplay_draft.scenes]
+    assert scene_ids == ["scene_001", "scene_002"]
     assert (
         updated_job.screenplay_draft.revision_notes == ["审查节奏。"]
     )
@@ -1251,6 +1268,11 @@ def test_generate_screenplay_with_mock_provider():
     assert updated_job.state == AdaptationState.SCREENPLAY_GENERATED
     draft = updated_job.screenplay_draft
     assert draft is not None
-    assert draft.scene_ids == ["scene_001", "scene_002"]
+    scene_ids = [s.id for s in draft.scenes]
+    assert len(draft.scenes) == 2
+    assert "scene_001" in scene_ids
     assert len(draft.revision_notes) == 2
     assert "场景 1" in draft.revision_notes[0]
+    # Verify beats are generated
+    for scene in draft.scenes:
+        assert len(scene.beats) >= 2

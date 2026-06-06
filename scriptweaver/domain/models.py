@@ -213,12 +213,53 @@ class AdaptationPlan:
 
 
 @dataclass(frozen=True)
-class ScreenplayDraft:
-    scene_ids: list[str] = field(default_factory=list)
-    revision_notes: list[str] = field(default_factory=list)
+class SceneHeading:
+    location: str
+    time: str
+    interior_exterior: str
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class Beat:
+    type: str
+    text: str
+    character_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ScreenplayScene:
+    id: str
+    heading: SceneHeading
+    source_chapter_indexes: list[int] = field(default_factory=list)
+    character_ids: list[str] = field(default_factory=list)
+    beats: list[Beat] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "heading": self.heading.to_dict(),
+            "source_chapter_indexes": list(self.source_chapter_indexes),
+            "character_ids": list(self.character_ids),
+            "beats": [beat.to_dict() for beat in self.beats],
+        }
+
+
+@dataclass(frozen=True)
+class ScreenplayDraft:
+    scenes: list[ScreenplayScene] = field(default_factory=list)
+    revision_notes: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "scenes": [scene.to_dict() for scene in self.scenes],
+            "revision_notes": list(self.revision_notes),
+        }
 
 
 @dataclass(frozen=True)

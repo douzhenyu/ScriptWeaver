@@ -10,9 +10,12 @@ from scriptweaver.ai.mock_provider import (
 from scriptweaver.domain.models import (
     AIAnalysis,
     AdaptationPlan,
+    Beat,
     Chapter,
+    SceneHeading,
     ScenePlan,
     ScreenplayDraft,
+    ScreenplayScene,
     UserConfirmations,
 )
 from scriptweaver.domain.workflow import AdaptationState
@@ -55,7 +58,26 @@ def make_full_job():
         job,
         state=AdaptationState.SCREENPLAY_GENERATED,
         screenplay_draft=ScreenplayDraft(
-            scene_ids=["scene_001", "scene_002"],
+            scenes=[
+                ScreenplayScene(
+                    id="scene_001",
+                    heading=SceneHeading(
+                        location="茶馆", time="夜", interior_exterior="INT"
+                    ),
+                    beats=[
+                        Beat(type="action", text="开场动作。"),
+                    ],
+                ),
+                ScreenplayScene(
+                    id="scene_002",
+                    heading=SceneHeading(
+                        location="街道", time="日", interior_exterior="EXT"
+                    ),
+                    beats=[
+                        Beat(type="action", text="过渡动作。"),
+                    ],
+                ),
+            ],
             revision_notes=[
                 "场景 1 需要审查节奏。",
                 "场景 2 对话需要润色。",
@@ -191,8 +213,13 @@ def test_export_includes_screenplay_draft():
     parsed = yaml.safe_load(yaml_str)
 
     screenplay = parsed["screenplay"]
-    assert "scene_ids" in screenplay
-    assert len(screenplay["scene_ids"]) == 2
+    assert "scenes" in screenplay
+    assert len(screenplay["scenes"]) == 2
+    # Verify nested structure
+    first_scene = screenplay["scenes"][0]
+    assert first_scene["id"] == "scene_001"
+    assert first_scene["heading"]["location"] == "茶馆"
+    assert len(first_scene["beats"]) == 1
 
 
 # ── revision_notes ───────────────────────────────────────────────
