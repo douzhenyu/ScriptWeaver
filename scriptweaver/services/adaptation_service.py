@@ -11,11 +11,13 @@ from scriptweaver.domain.analysis_validation import validate_analysis
 from scriptweaver.domain.models import (
     AIAnalysis,
     AdaptationJob,
+    AdaptationPlan,
     Chapter,
     Uncertainty,
     UncertaintyResolution,
     UserConfirmations,
 )
+from scriptweaver.domain.plan_validation import validate_plan
 from scriptweaver.domain.uncertainty_validation import (
     validate_uncertainty_resolutions,
 )
@@ -177,4 +179,21 @@ class AdaptationService:
             job,
             state=AdaptationState.PLAN_GENERATED,
             adaptation_plan=deepcopy(plan),
+        )
+
+    def confirm_plan(
+        self,
+        job: AdaptationJob,
+        confirmed_plan: AdaptationPlan,
+    ) -> AdaptationJob:
+        ensure_transition_allowed(
+            job.state, AdaptationState.PLAN_CONFIRMED
+        )
+
+        validate_plan(confirmed_plan)
+
+        return replace(
+            job,
+            state=AdaptationState.PLAN_CONFIRMED,
+            adaptation_plan=deepcopy(confirmed_plan),
         )
