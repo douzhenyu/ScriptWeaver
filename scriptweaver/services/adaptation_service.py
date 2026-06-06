@@ -4,7 +4,8 @@ from copy import deepcopy
 from dataclasses import replace
 
 from scriptweaver.ai.provider import AIAnalysisProvider
-from scriptweaver.domain.models import AdaptationJob, Chapter
+from scriptweaver.domain.analysis_validation import validate_analysis
+from scriptweaver.domain.models import AIAnalysis, AdaptationJob, Chapter
 from scriptweaver.domain.workflow import AdaptationState, ensure_transition_allowed
 
 
@@ -49,4 +50,20 @@ class AdaptationService:
             job,
             state=AdaptationState.ANALYSIS_GENERATED,
             ai_analysis=analysis,
+        )
+
+    def confirm_analysis(
+        self,
+        job: AdaptationJob,
+        confirmed_analysis: AIAnalysis,
+    ) -> AdaptationJob:
+        ensure_transition_allowed(job.state, AdaptationState.ANALYSIS_CONFIRMED)
+
+        chapter_indexes = {chapter.index for chapter in job.chapters}
+        validate_analysis(confirmed_analysis, chapter_indexes)
+
+        return replace(
+            job,
+            state=AdaptationState.ANALYSIS_CONFIRMED,
+            confirmed_analysis=deepcopy(confirmed_analysis),
         )
