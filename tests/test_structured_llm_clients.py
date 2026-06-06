@@ -335,3 +335,107 @@ def test_openai_compatible_client_rejects_non_object_json(
 
     with pytest.raises(StructuredLLMError, match="must be a JSON object"):
         client.generate_json("system", "input")
+
+
+# ---- Vendor default and override tests ----
+
+
+@pytest.mark.parametrize(
+    ("client_type", "expected_base_url", "expected_model"),
+    [
+        (
+            "deepseek",
+            "https://api.deepseek.com",
+            "deepseek-v4-flash",
+        ),
+        (
+            "qwen",
+            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "qwen-plus",
+        ),
+    ],
+)
+def test_vendor_clients_use_default_configuration(
+    monkeypatch,
+    client_type,
+    expected_base_url,
+    expected_model,
+):
+    from scriptweaver.llm import openai_compatible
+    from scriptweaver.llm.deepseek import DeepSeekStructuredLLMClient
+    from scriptweaver.llm.qwen import QwenStructuredLLMClient
+
+    completions = FakeCompletions()
+    factory = FakeOpenAIFactory(completions)
+    monkeypatch.setattr(openai_compatible, "OpenAI", factory)
+    client_class = {
+        "deepseek": DeepSeekStructuredLLMClient,
+        "qwen": QwenStructuredLLMClient,
+    }[client_type]
+
+    client = client_class(api_key="secret-key")
+    client.generate_json("system", "input")
+
+    assert factory.calls == [
+        {
+            "api_key": "secret-key",
+            "base_url": expected_base_url,
+            "timeout": 120.0,
+            "max_retries": 0,
+        }
+    ]
+    assert completions.calls[0]["model"] == expected_model
+
+
+@pytest.mark.parametrize("client_type", ["deepseek", "qwen"])
+def test_vendor_clients_allow_configuration_overrides(
+    monkeypatch,
+    client_type,
+):
+    from scriptweaver.llm import openai_compatible
+    from scriptweaver.llm.deepseek import DeepSeekStructuredLLMClient
+    from scriptweaver.llm.qwen import QwenStructuredLLMClient
+
+    completions = FakeCompletions()
+    factory = FakeOpenAIFactory(completions)
+    monkeypatch.setattr(openai_compatible, "OpenAI", factory)
+    client_class = {
+        "deepseek": DeepSeekStructuredLLMClient,
+        "qwen": QwenStructuredLLMClient,
+    }[client_type]
+
+    client = client_class(
+        api_key="secret-key",
+        base_url="https://custom.test/v1",
+        model="custom-model",
+        timeout_seconds=30.0,
+    )
+    client.generate_json("system", "input")
+
+    assert factory.calls[0]["base_url"] == "https://custom.test/v1"
+    assert factory.calls[0]["timeout"] == 30.0
+    assert completions.calls[0]["model"] == "custom-model"
+
+
+# ---- Public export test ----
+
+
+def test_structured_llm_implementations_are_public_exports():
+    from scriptweaver.llm import (
+        DeepSeekStructuredLLMClient,
+        OpenAICompatibleStructuredLLMClient,
+        QwenStructuredLLMClient,
+    )
+    from scriptweaver.llm.deepseek import (
+        DeepSeekStructuredLLMClient as DirectDeepSeekClient,
+    )
+    from scriptweaver.llm.openai_compatible import (
+        OpenAICompatibleStructuredLLMClient as DirectCompatibleClient,
+    )
+    from scriptweaver.llm.qwen import (
+        QwenStructuredLLMClient as DirectQwenClient,
+    )
+
+    assert DeepSeekStructuredLLMClient is DirectDeepSeekClient
+    assert OpenAICompatibleStructuredLLMClient is DirectCompatibleClient
+    assert QwenStructuredLLMClient is DirectQwenClient
