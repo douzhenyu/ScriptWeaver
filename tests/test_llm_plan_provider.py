@@ -12,6 +12,10 @@ from scriptweaver.domain.models import (
     KeyEvent,
     PlanReviewQuestion,
     ScenePlan,
+    Uncertainty,
+    UncertaintyOption,
+    UncertaintyResolution,
+    UserConfirmations,
 )
 from scriptweaver.llm.client import StructuredLLMError
 
@@ -218,3 +222,173 @@ def test_parses_review_questions():
     assert plan.review_questions[0].id == "review_overall"
     # Scene-level review questions
     assert len(plan.scenes[0].review_questions) == 1
+
+
+# ── PR 38: Pass author confirmations to plan AI ─────────────────────
+
+
+def make_analysis_with_uncertainties() -> AIAnalysis:
+    return AIAnalysis(
+        characters=[
+            Character(
+                id="char_001",
+                name="林照",
+                role="protagonist",
+                description="调查旧案的人。",
+                goal="查明真相。",
+                motivation="保护家人。",
+            )
+        ],
+        key_events=[
+            KeyEvent(
+                id="event_001",
+                summary="林照收到密信。",
+                character_ids=["char_001"],
+                source_chapter_indexes=[1],
+            )
+        ],
+        uncertainties=[
+            Uncertainty(
+                id="uncertainty_001",
+                question="关键关系人是否提前知道线索？",
+                context="人物动机影响冲突。",
+                options=[
+                    UncertaintyOption(
+                        id="option_001",
+                        label="提前知情",
+                        description="关键关系人一直知道。",
+                        impact="强化隐瞒与信任冲突。",
+                    ),
+                    UncertaintyOption(
+                        id="option_002",
+                        label="刚刚得知",
+                        description="与主角同时发现。",
+                        impact="强化共同调查关系。",
+                    ),
+                ],
+                allow_custom_answer=True,
+                source_chapter_indexes=[1],
+            ),
+        ],
+    )
+
+
+def test_prompt_includes_selected_option_details():
+    """Prompt must include selected option label, description, and impact."""
+    from scriptweaver.ai.llm_plan_provider import LLMPlanProvider
+
+    client = FakeLLMClient(make_valid_llm_response())
+    provider = LLMPlanProvider(client)
+
+    confirmations = UserConfirmations(
+        uncertainty_resolutions=[
+            UncertaintyResolution(
+                uncertainty_id="uncertainty_001",
+                selected_option_id="option_001",
+            ),
+        ],
+    )
+    provider.generate_plan(
+        make_analysis_with_uncertainties(),
+        make_chapters(),
+        user_confirmations=confirmations,
+    )
+
+    prompt = client.last_input_prompt
+    assert "提前知情" in prompt
+    assert "关键关系人一直知道" in prompt
+    assert "强化隐瞒与信任冲突" in prompt
+
+
+def test_prompt_includes_custom_answer():
+    """Prompt must include custom answer text."""
+    from scriptweaver.ai.llm_plan_provider import LLMPlanProvider
+
+    client = FakeLLMClient(make_valid_llm_response())
+    provider = LLMPlanProvider(client)
+
+    confirmations = UserConfirmations(
+        uncertainty_resolutions=[
+            UncertaintyResolution(
+                uncertainty_id="uncertainty_001",
+                custom_answer="关键关系人可能早就知道，但选择隐瞒。",
+            ),
+        ],
+    )
+    provider.generate_plan(
+        make_analysis_with_uncertainties(),
+        make_chapters(),
+        user_confirmations=confirmations,
+    )
+
+    prompt = client.last_input_prompt
+    assert "关键关系人可能早就知道，但选择隐瞒" in prompt
+
+
+def test_prompt_includes_required_plot_points_and_notes():
+    """Prompt must include required plot points and author notes."""
+    from scriptweaver.ai.llm_plan_provider import LLMPlanProvider
+
+    client = FakeLLMClient(make_valid_llm_response())
+    provider = LLMPlanProvider(client)
+
+    confirmations = UserConfirmations(
+        required_plot_points=[
+            "必须展现林照发现密信的关键时刻",
+            "沈微的立场转变",
+        ],
+        notes="整体基调偏向悬疑而非动作。",
+    )
+    provider.generate_plan(
+        make_analysis_with_uncertainties(),
+        make_chapters(),
+        user_confirmations=confirmations,
+    )
+
+    prompt = client.last_input_prompt
+    assert "必须展现林照发现密信的关键时刻" in prompt
+    assert "沈微的立场转变" in prompt
+    assert "整体基调偏向悬疑而非动作" in prompt
+
+
+def test_different_confirmations_produce_different_prompts():
+    """Two different sets of answers must produce different prompts."""
+    from scriptweaver.ai.llm_plan_provider import LLMPlanProvider
+
+    client_a = FakeLLMClient(make_valid_llm_response())
+    provider_a = LLMPlanProvider(client_a)
+
+    confirmations_a = UserConfirmations(
+        uncertainty_resolutions=[
+            UncertaintyResolution(
+                uncertainty_id="uncertainty_001",
+                selected_option_id="option_001",
+            ),
+        ],
+    )
+    provider_a.generate_plan(
+        make_analysis_with_uncertainties(),
+        make_chapters(),
+        user_confirmations=confirmations_a,
+    )
+    prompt_a = client_a.last_input_prompt
+
+    client_b = FakeLLMClient(make_valid_llm_response())
+    provider_b = LLMPlanProvider(client_b)
+
+    confirmations_b = UserConfirmations(
+        uncertainty_resolutions=[
+            UncertaintyResolution(
+                uncertainty_id="uncertainty_001",
+                selected_option_id="option_002",
+            ),
+        ],
+    )
+    provider_b.generate_plan(
+        make_analysis_with_uncertainties(),
+        make_chapters(),
+        user_confirmations=confirmations_b,
+    )
+    prompt_b = client_b.last_input_prompt
+
+    assert prompt_a != prompt_b

@@ -7,6 +7,7 @@ from scriptweaver.domain.models import (
     AdaptationPlan,
     Chapter,
     ScreenplayDraft,
+    UserConfirmations,
 )
 
 
@@ -24,8 +25,10 @@ class AdaptationPlanProvider(Protocol):
         self,
         confirmed_analysis: AIAnalysis,
         chapters: list[Chapter],
+        user_confirmations: UserConfirmations | None = None,
     ) -> AdaptationPlan:
-        """Generate adaptation plan from confirmed analysis and chapters."""
+        """Generate adaptation plan from confirmed analysis, chapters, and
+        author confirmations."""
 
 
 class ScreenplayProvider(Protocol):

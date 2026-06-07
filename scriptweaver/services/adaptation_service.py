@@ -249,6 +249,7 @@ class AdaptationService:
         plan = self._plan_provider.generate_plan(
             job.confirmed_analysis,
             list(job.chapters),
+            user_confirmations=job.user_confirmations,
         )
 
         return replace(

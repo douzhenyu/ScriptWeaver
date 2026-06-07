@@ -981,6 +981,7 @@ class RecordingPlanProvider:
     def __init__(self) -> None:
         self.received_analysis: AIAnalysis | None = None
         self.received_chapters: list[Chapter] | None = None
+        self.received_confirmations: UserConfirmations | None = None
         self.plan = AdaptationPlan(
             target_format="short_drama",
             structure="3 scenes, linear progression",
@@ -990,9 +991,11 @@ class RecordingPlanProvider:
         self,
         confirmed_analysis: AIAnalysis,
         chapters: list[Chapter],
+        user_confirmations: UserConfirmations | None = None,
     ) -> AdaptationPlan:
         self.received_analysis = confirmed_analysis
         self.received_chapters = chapters
+        self.received_confirmations = user_confirmations
         return self.plan
 
 
@@ -1007,6 +1010,7 @@ class MutatingPlanProvider:
         self,
         confirmed_analysis: AIAnalysis,
         chapters: list[Chapter],
+        user_confirmations: UserConfirmations | None = None,
     ) -> AdaptationPlan:
         chapters.clear()
         return self.plan
