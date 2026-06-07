@@ -137,12 +137,12 @@ def _merge_screenplay_edits(
 ):
     """Apply frontend edits to a ScreenplayDraft.
 
-    scene_updates is a list of {id, beats: [{type, text, character_id}]}.
-    Only scenes present in the update list are modified; others stay unchanged.
+    scene_updates is a list of {id, heading?, beats: [{type, text, character_id}]}.
+    Only scenes present in the update list are modified.
     """
     from dataclasses import replace
 
-    from scriptweaver.domain.models import Beat, ScreenplayScene
+    from scriptweaver.domain.models import Beat, SceneHeading, ScreenplayScene
 
     current_by_id = {s.id: s for s in draft.scenes}
     updated_scenes = list(draft.scenes)
@@ -160,10 +160,23 @@ def _merge_screenplay_edits(
             )
             for b in su.get("beats", [])
         ]
+        # Apply heading update if provided
+        heading_raw = su.get("heading")
+        new_heading = current.heading
+        if isinstance(heading_raw, dict):
+            new_heading = SceneHeading(
+                location=heading_raw.get("location", ""),
+                time=heading_raw.get("time", ""),
+                interior_exterior=heading_raw.get(
+                    "interior_exterior", "INT"
+                ),
+            )
         idx = next(
             i for i, s in enumerate(updated_scenes) if s.id == sid
         )
-        updated_scenes[idx] = replace(current, beats=new_beats)
+        updated_scenes[idx] = replace(
+            current, beats=new_beats, heading=new_heading
+        )
 
     return replace(draft, scenes=updated_scenes)
 

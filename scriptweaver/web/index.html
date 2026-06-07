@@ -378,7 +378,7 @@ function renderScreenplay(draft) {
   let h='';
   draft.scenes.forEach((s,si)=>{
     h+='<div class="scene-card"><h3>'+s.id+'</h3>';
-    if (s.heading) h+='<div class="info">📍 '+s.heading.location+' · '+s.heading.time+' · '+s.heading.interior_exterior+'</div>';
+    if (s.heading) h+='<div class="info" style="cursor:pointer" title="点击编辑场景信息" onclick="editHeading('+si+')">📍 '+escapeHtml(s.heading.location)+' · '+escapeHtml(s.heading.time)+' · '+escapeHtml(s.heading.interior_exterior)+'</div>';
     (s.beats||[]).forEach((b,bi)=>{
       const cls = 'beat '+(b.type||'action');
       const char = b.character_id ? ' <span class="char-tag">'+charName(b.character_id)+'</span>' : '';
@@ -434,12 +434,34 @@ function deleteBeat(si, bi) {
   renderScreenplay(currentDraft);
 }
 
+function editHeading(si) {
+  const h = currentDraft.scenes[si].heading || {location:'', time:'', interior_exterior:'INT'};
+  let html = '<h3>编辑场景信息 — '+currentDraft.scenes[si].id+'</h3>';
+  html += '<div class="row"><label>地点：<input id="edit-loc" value="'+escapeHtml(h.location||'')+'"></label>';
+  html += '<label style="margin-left:8px">时间：<input id="edit-time" value="'+escapeHtml(h.time||'')+'"></label>';
+  html += '<label style="margin-left:8px">内外景：<select id="edit-ie"><option value="INT"'+(h.interior_exterior==='INT'?' selected':'')+'>INT 内景</option><option value="EXT"'+(h.interior_exterior==='EXT'?' selected':'')+'>EXT 外景</option><option value="INT/EXT"'+(h.interior_exterior==='INT/EXT'?' selected':'')+'>INT/EXT 内外景</option></select></label></div>';
+  html += '<div class="row" style="margin-top:8px"><button class="btn-primary" onclick="saveHeading('+si+')">确认</button><button class="btn-outline" onclick="closeEditor()">取消</button></div>';
+  document.getElementById('beat-editor').innerHTML = html;
+  document.getElementById('beat-editor').classList.remove('hidden');
+  document.getElementById('beat-editor').scrollIntoView({behavior:'smooth'});
+}
+
+function saveHeading(si) {
+  const loc = document.getElementById('edit-loc').value.trim();
+  const time = document.getElementById('edit-time').value.trim();
+  const ie = document.getElementById('edit-ie').value;
+  if (!loc && !time) return;
+  currentDraft.scenes[si].heading = {location: loc, time, interior_exterior: ie};
+  renderScreenplay(currentDraft);
+}
+
 async function saveScreenplay() {
   const btn = document.querySelector('#screenplay-content .btn-success');
   setLoading(btn, true, '保存中…');
   try {
     const scenes = currentDraft.scenes.map(s=>({
       id: s.id,
+      heading: s.heading || {location:'', time:'', interior_exterior:'INT'},
       beats: (s.beats||[]).map(b=>({
         type: b.type||'action',
         text: b.text||'',
