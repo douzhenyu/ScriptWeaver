@@ -20,6 +20,7 @@ from scriptweaver.domain.models import (
     UserConfirmations,
 )
 from scriptweaver.domain.plan_validation import validate_plan
+from scriptweaver.services.progress import progress, with_progress
 from scriptweaver.domain.uncertainty_validation import (
     validate_uncertainty_resolutions,
 )
@@ -67,17 +68,22 @@ class AdaptationService:
     def generate_analysis(self, job: AdaptationJob) -> AdaptationJob:
         ensure_transition_allowed(job.state, AdaptationState.ANALYSIS_GENERATED)
 
-        provider_analysis = self._ai_provider.analyze_chapters(list(job.chapters))
-        analysis = deepcopy(provider_analysis)
+        def _run():
+            nonlocal job
+            provider_analysis = self._ai_provider.analyze_chapters(
+                list(job.chapters)
+            )
+            analysis = deepcopy(provider_analysis)
+            chapter_indexes = {chapter.index for chapter in job.chapters}
+            validate_analysis(analysis, chapter_indexes)
+            progress("分析完成")
+            return replace(
+                job,
+                state=AdaptationState.ANALYSIS_GENERATED,
+                ai_analysis=analysis,
+            )
 
-        chapter_indexes = {chapter.index for chapter in job.chapters}
-        validate_analysis(analysis, chapter_indexes)
-
-        return replace(
-            job,
-            state=AdaptationState.ANALYSIS_GENERATED,
-            ai_analysis=analysis,
-        )
+        return with_progress(job.id, _run)
 
     def confirm_analysis(self, job: AdaptationJob) -> AdaptationJob:
         if job.ai_analysis is None:
@@ -247,17 +253,21 @@ class AdaptationService:
                 "No confirmed analysis to generate plan from"
             )
 
-        plan = self._plan_provider.generate_plan(
-            job.confirmed_analysis,
-            list(job.chapters),
-            user_confirmations=job.user_confirmations,
-        )
+        def _run():
+            progress("正在生成改编计划…")
+            plan = self._plan_provider.generate_plan(
+                job.confirmed_analysis,
+                list(job.chapters),
+                user_confirmations=job.user_confirmations,
+            )
+            progress("计划生成完成")
+            return replace(
+                job,
+                state=AdaptationState.PLAN_GENERATED,
+                adaptation_plan=deepcopy(plan),
+            )
 
-        return replace(
-            job,
-            state=AdaptationState.PLAN_GENERATED,
-            adaptation_plan=deepcopy(plan),
-        )
+        return with_progress(job.id, _run)
 
     def confirm_plan(
         self,
@@ -297,16 +307,20 @@ class AdaptationService:
                 "No adaptation plan to generate screenplay from"
             )
 
-        draft = self._screenplay_provider.generate_screenplay(
-            job.adaptation_plan,
-            list(job.chapters),
-        )
+        def _run():
+            progress("正在生成剧本…")
+            draft = self._screenplay_provider.generate_screenplay(
+                job.adaptation_plan,
+                list(job.chapters),
+            )
+            progress("剧本生成完成")
+            return replace(
+                job,
+                state=AdaptationState.SCREENPLAY_GENERATED,
+                screenplay_draft=deepcopy(draft),
+            )
 
-        return replace(
-            job,
-            state=AdaptationState.SCREENPLAY_GENERATED,
-            screenplay_draft=deepcopy(draft),
-        )
+        return with_progress(job.id, _run)
 
     def update_screenplay(
         self,

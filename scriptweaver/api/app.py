@@ -31,6 +31,7 @@ from scriptweaver.services.adaptation_service import (
     AdaptationService,
     AdaptationServiceError,
 )
+from scriptweaver.services.progress import get_progress, clear_progress
 from scriptweaver.services.chapter_splitter import (
     ChapterSplitterError,
     split_chapters,
@@ -215,6 +216,14 @@ def create_app(
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    # ── Progress ─────────────────────────────────────────────
+
+    @app.get("/jobs/{job_id}/progress")
+    def job_progress(job_id: str):
+        """Poll for the current progress message during long ops."""
+        _get_job(job_id)  # 404 if not found
+        return {"job_id": job_id, "message": get_progress(job_id)}
 
     # ── Create job ───────────────────────────────────────────
 

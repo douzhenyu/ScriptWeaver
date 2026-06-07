@@ -117,6 +117,7 @@ let jobId = '';
 let uncertaintyIndex = 0;
 let uncertainties = [];
 let charNames = {};  // character_id → name lookup
+let progressTimer = null;
 
 function charName(id) {
   if (!id) return '';
@@ -436,10 +437,38 @@ function setLoading(btn, loading, text) {
     btn._origText = btn.textContent;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>' + (text || '处理中…');
+    startProgressPoll();
   } else {
     btn.disabled = false;
     btn.textContent = btn._origText || btn.textContent;
+    stopProgressPoll();
   }
+}
+
+function startProgressPoll() {
+  stopProgressPoll();
+  let el = document.getElementById('progress-bar');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'progress-bar';
+    el.style.cssText = 'background:#e7f1ff;border:1px solid #9ec5fe;padding:6px 12px;border-radius:6px;margin-bottom:12px;font-size:13px;color:#0d6efd;display:none;';
+    document.querySelector('main').prepend(el);
+  }
+  el.style.display = 'block';
+  el.innerHTML = '<span class="spinner"></span> 准备中…';
+  progressTimer = setInterval(async () => {
+    if (!jobId) return;
+    try {
+      const r = await api('GET','/jobs/'+jobId+'/progress');
+      if (r && r.message) el.innerHTML = '<span class="spinner"></span> '+r.message;
+    } catch(e) { /* ignore */ }
+  }, 1500);
+}
+
+function stopProgressPoll() {
+  if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+  const el = document.getElementById('progress-bar');
+  if (el) el.style.display = 'none';
 }
 
 // Show inline error in a card, auto-dismiss after 6s

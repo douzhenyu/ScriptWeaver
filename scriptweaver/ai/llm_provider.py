@@ -213,15 +213,18 @@ class LLMAnalysisProvider:
     def _analyze_map_reduce(
         self, chapters: list[Chapter]
     ) -> AIAnalysis:
+        from scriptweaver.services.progress import progress as _p
+
         total = len(chapters)
 
-        # Phase 1 — Map: per-chapter analysis (sequential for now;
-        # callers can parallelize via ThreadPoolExecutor)
+        # Phase 1 — Map: per-chapter analysis
         per_chapter: list[AIAnalysis] = []
-        for ch in chapters:
+        for i, ch in enumerate(chapters):
+            _p(f"正在分析第 {i+1}/{total} 章：{ch.title}")
             per_chapter.append(self._analyze_chapter(ch, total))
 
         # Phase 2 — Reduce: merge into unified analysis
+        _p(f"正在合并 {total} 个章节的分析结果…")
         return self._merge_analyses(per_chapter, chapters)
 
     def _analyze_chapter(
