@@ -4,7 +4,9 @@ import pytest
 
 from scriptweaver.ai.provider import AIProviderInputError
 from scriptweaver.domain.models import (
+    CandidateScene,
     AIAnalysis,
+    CandidateScene,
     AdaptationDecision,
     AdaptationPlan,
     Chapter,
@@ -119,6 +121,16 @@ def make_confirmed_analysis() -> AIAnalysis:
                 character_ids=["char_001"],
                 source_chapter_indexes=[1],
             )
+        ],
+        candidate_scenes=[
+            CandidateScene(
+                id='candidate_scene_001',
+                title='候选场景',
+                summary='摘要',
+                dramatic_purpose='目的',
+                location='地点',
+                time_hint='时间',
+            ),
         ],
     )
 
@@ -268,6 +280,16 @@ def make_analysis_with_uncertainties() -> AIAnalysis:
                 ],
                 allow_custom_answer=True,
                 source_chapter_indexes=[1],
+            )
+        ],
+        candidate_scenes=[
+            CandidateScene(
+                id='candidate_scene_001',
+                title='候选场景',
+                summary='摘要',
+                dramatic_purpose='目的',
+                location='地点',
+                time_hint='时间',
             ),
         ],
     )

@@ -427,3 +427,25 @@ def test_rejects_blank_decision_id():
                        match="decision id must not be blank"):
         validate_plan(plan, confirmed_analysis=analysis,
                       chapter_indexes=chapters)
+
+
+def test_accepts_forward_reference_in_review_question():
+    """A review question in an earlier scene may reference a later scene."""
+    rq = PlanReviewQuestion(
+        id="rq_fwd", question="Q", context="C",
+        related_scene_ids=["scene_002"],
+    )
+    scenes = list(make_valid_plan().scenes)
+    scenes[0] = replace(scenes[0], review_questions=[rq])
+    plan = replace(make_valid_plan(), scenes=scenes)
+    validate_plan(plan)
+
+
+def test_rejects_character_reference_when_analysis_empty():
+    """Plan referencing a character must fail even when analysis has none."""
+    plan = replace(make_valid_plan(), scenes=[
+        replace(s, character_ids=["ghost"])
+        for s in make_valid_plan().scenes
+    ])
+    with pytest.raises(PlanValidationError, match="unknown character"):
+        validate_plan(plan, confirmed_analysis=AIAnalysis())
