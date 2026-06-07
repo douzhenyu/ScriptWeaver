@@ -307,7 +307,28 @@ class LLMScreenplayProvider:
         try:
             validate_screenplay(draft, confirmed_plan)
         except ScreenplayValidationError as error:
-            raise AIProviderError(str(error)) from error
+            # Retry: find the failing scene and regenerate it
+            _p(f"验证未通过，正在修正：{error}")
+            err_msg = str(error)
+            # Try to extract scene id from error message
+            for j, s in enumerate(scenes):
+                if s.id in err_msg:
+                    _p(f"重新生成场景：{s.id}")
+                    retry_scene, retry_notes = self._generate_scene(
+                        plan_scenes[j], chapters_by_index,
+                    )
+                    scenes[j] = replace(retry_scene, id=s.id)
+                    all_notes.extend(retry_notes)
+                    break
+
+            draft = ScreenplayDraft(
+                scenes=scenes,
+                revision_notes=all_notes,
+            )
+            try:
+                validate_screenplay(draft, confirmed_plan)
+            except ScreenplayValidationError as retry_error:
+                raise AIProviderError(str(retry_error)) from retry_error
         return draft
 
     def _generate_scene(
