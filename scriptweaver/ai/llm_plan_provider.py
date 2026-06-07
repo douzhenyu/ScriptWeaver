@@ -295,12 +295,64 @@ class LLMPlanProvider:
             f"Do NOT default to 3 scenes. Scale up with the chapter count."
         )
 
-        parts.append("\n## Source Chapters")
-        for chapter in chapters:
-            parts.append(
-                f"\n### Chapter {chapter.index}: {chapter.title}\n"
-                f"{chapter.content}"
-            )
+        # Use full text for short novels, summaries for long ones
+        if len(chapters) < 5:
+            parts.append("\n## Source Chapters (full text)")
+            for chapter in chapters:
+                parts.append(
+                    f"\n### Chapter {chapter.index}: {chapter.title}\n"
+                    f"{chapter.content}"
+                )
+        else:
+            parts.append("\n## Chapter Summaries")
+            # Build per-chapter event and scene indexes from analysis
+            events_by_ch: dict[int, list[str]] = {}
+            for e in confirmed_analysis.key_events:
+                for idx in e.source_chapter_indexes:
+                    events_by_ch.setdefault(idx, []).append(e.summary)
+
+            scenes_by_ch: dict[int, list[str]] = {}
+            for s in confirmed_analysis.candidate_scenes:
+                for idx in s.source_chapter_indexes:
+                    scenes_by_ch.setdefault(idx, []).append(s.title)
+
+            conflicts_by_ch: dict[int, list[str]] = {}
+            for c in confirmed_analysis.conflicts:
+                for idx in c.source_chapter_indexes:
+                    conflicts_by_ch.setdefault(idx, []).append(
+                        c.description[:80]
+                    )
+
+            themes_by_ch: dict[int, list[str]] = {}
+            for t in confirmed_analysis.themes:
+                for idx in t.source_chapter_indexes:
+                    themes_by_ch.setdefault(idx, []).append(t.statement)
+
+            for chapter in chapters:
+                idx = chapter.index
+                parts.append(
+                    f"\n### Chapter {idx}: {chapter.title}"
+                )
+                if idx in events_by_ch:
+                    parts.append(
+                        "Key events: "
+                        + "; ".join(events_by_ch[idx])
+                    )
+                if idx in scenes_by_ch:
+                    parts.append(
+                        "Candidate scenes: "
+                        + "; ".join(scenes_by_ch[idx])
+                    )
+                if idx in conflicts_by_ch:
+                    parts.append(
+                        "Conflicts: "
+                        + "; ".join(conflicts_by_ch[idx])
+                    )
+                if idx in themes_by_ch:
+                    parts.append(
+                        "Themes: "
+                        + "; ".join(themes_by_ch[idx])
+                    )
 
         return "\n".join(parts)
 
