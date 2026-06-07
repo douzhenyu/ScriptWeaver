@@ -93,6 +93,7 @@ pre { background: #f1f3f5; padding: 12px; border-radius: var(--radius); overflow
     <h2>3. AI 分析结果</h2>
     <div id="analysis-content"></div>
     <button class="btn-primary hidden" id="start-qa-btn" onclick="startQA()">开始逐题回答</button>
+    <button class="btn-success hidden" id="skip-qa-btn" onclick="confirmAnalysis()">确认分析，生成计划</button>
   </div>
 
   <div id="uncertainty-qa" class="card hidden">
@@ -233,8 +234,10 @@ async function doAnalyze() {
   show('analysis-result'); setStep(3);
   if (job.ai_analysis.uncertainties && job.ai_analysis.uncertainties.length>0) {
     document.getElementById('start-qa-btn').classList.remove('hidden');
+    document.getElementById('skip-qa-btn').classList.add('hidden');
   } else {
     document.getElementById('start-qa-btn').classList.add('hidden');
+    document.getElementById('skip-qa-btn').classList.remove('hidden');
   }
 }
 
