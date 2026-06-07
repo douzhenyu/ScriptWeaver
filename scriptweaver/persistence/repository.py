@@ -44,6 +44,14 @@ class JobRepository(Protocol):
         """Check whether a job exists."""
         ...
 
+    def list_all(self) -> list[dict[str, str]]:
+        """List all jobs with id and state. Lightweight summary."""
+        ...
+
+    def delete(self, job_id: str) -> bool:
+        """Delete a job by ID. Returns True if it existed."""
+        ...
+
 
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -61,6 +69,8 @@ ON CONFLICT(id) DO UPDATE SET state = excluded.state, data = excluded.data
 
 SELECT_SQL = "SELECT data FROM jobs WHERE id = ?"
 EXISTS_SQL = "SELECT 1 FROM jobs WHERE id = ?"
+LIST_SQL = "SELECT id, state FROM jobs ORDER BY id"
+DELETE_SQL = "DELETE FROM jobs WHERE id = ?"
 
 
 class SqliteJobRepository:
@@ -97,6 +107,15 @@ class SqliteJobRepository:
         cursor = self._conn.execute(EXISTS_SQL, (job_id,))
         return cursor.fetchone() is not None
 
+    def list_all(self) -> list[dict[str, str]]:
+        rows = self._conn.execute(LIST_SQL).fetchall()
+        return [{"id": r[0], "state": r[1]} for r in rows]
+
+    def delete(self, job_id: str) -> bool:
+        cursor = self._conn.execute(DELETE_SQL, (job_id,))
+        self._conn.commit()
+        return cursor.rowcount > 0
+
 
 class InMemoryJobRepository:
     """In-memory job repository backed by a plain dict.
@@ -119,3 +138,15 @@ class InMemoryJobRepository:
 
     def exists(self, job_id: str) -> bool:
         return job_id in self._jobs
+
+    def list_all(self) -> list[dict[str, str]]:
+        return [
+            {"id": jid, "state": job.state.value}
+            for jid, job in self._jobs.items()
+        ]
+
+    def delete(self, job_id: str) -> bool:
+        if job_id in self._jobs:
+            del self._jobs[job_id]
+            return True
+        return False
