@@ -147,8 +147,43 @@ def _align_scene_ids(
     return replace(draft, scenes=corrected)
 
 
+PER_SCENE_SYSTEM_PROMPT = """\
+You are a professional screenplay writer. Write a detailed screenplay scene \
+based on the plan and source chapters provided.
+
+Return a JSON object with exactly these keys:
+
+- "heading": object with: location, time, interior_exterior
+- "beats": list of beat objects (6-15 beats, must NOT be fewer than 4)
+- "source_chapter_indexes": list of ints — copy EXACTLY from the plan
+- "character_ids": list of strings — copy EXACTLY from the plan
+- "revision_notes": list of 1-2 brief revision suggestions for this scene
+
+A beat object has fields:
+  type (one of: "action", "dialogue", "voiceover"),
+  text (string — MUST be detailed and vivid, 1-3 sentences per beat),
+  character_id (string, required for dialogue and voiceover, null for action)
+
+CRITICAL — Content density:
+- Each scene MUST have 6-15 beats. Do NOT stop at 2-3.
+- Action beats: concrete movements, expressions, environmental details.
+- Dialogue beats: natural, character-specific lines with subtext.
+- Voiceover beats: inner thoughts, memories, thematic commentary.
+- Balance: roughly 40% action, 40% dialogue, 20% voiceover.
+
+IMPORTANT: Copy source_chapter_indexes and character_ids EXACTLY from the \
+plan above. Chapter indexes are 1-based."""
+
+
 class LLMScreenplayProvider:
-    """Screenplay provider backed by a structured LLM client."""
+    """Screenplay provider backed by a structured LLM client.
+
+    Uses per-scene generation for 2+ scenes: each scene gets its own
+    LLM call with only the relevant chapters, producing richer output.
+    Single-scene plans use the original single-call path.
+    """
+
+    PER_SCENE_THRESHOLD = 2
 
     def __init__(self, llm_client: StructuredLLMClient) -> None:
         self._llm_client = llm_client
@@ -163,6 +198,26 @@ class LLMScreenplayProvider:
                 "At least 1 chapter is required for screenplay generation"
             )
 
+        plan_scenes = confirmed_plan.scenes
+        if not plan_scenes:
+            raise AIProviderInputError(
+                "Plan must have at least 1 scene"
+            )
+
+        # Single scene or few scenes: original single-call path
+        if len(plan_scenes) < self.PER_SCENE_THRESHOLD:
+            return self._generate_single_call(confirmed_plan, chapters)
+
+        # Per-scene generation for better focus
+        return self._generate_per_scene(confirmed_plan, chapters)
+
+    # ── Single-call path ──────────────────────────────────────
+
+    def _generate_single_call(
+        self,
+        confirmed_plan: AdaptationPlan,
+        chapters: list[Chapter],
+    ) -> ScreenplayDraft:
         user_prompt = self._build_user_prompt(confirmed_plan, chapters)
         plan_scene_ids = [s.id for s in confirmed_plan.scenes]
 
@@ -181,38 +236,151 @@ class LLMScreenplayProvider:
         try:
             validate_screenplay(draft, confirmed_plan)
         except ScreenplayValidationError as error:
-            # Retry once with validation error feedback
-            retry_prompt = (
-                f"{user_prompt}\n\n"
-                f"Your previous response was invalid.\n"
-                f"Validation error: {error}\n\n"
-                f"CRITICAL: You MUST use exactly these scene IDs "
-                f"in order: {plan_scene_ids}\n"
-                f"Each scene's source_chapter_indexes and character_ids "
-                f"must match the plan above. "
-                f"Please fix all issues and return a corrected "
-                f"screenplay JSON."
+            draft = self._retry_single_call(
+                user_prompt, plan_scene_ids, confirmed_plan, error
             )
-            try:
-                retry_raw = self._llm_client.generate_json(
-                    SYSTEM_PROMPT, retry_prompt
-                )
-            except StructuredLLMError as retry_error:
-                raise AIProviderError(str(retry_error)) from retry_error
-            except Exception as retry_error:
-                raise AIProviderError(
-                    f"LLM screenplay retry failed: {retry_error}"
-                ) from retry_error
-
-            draft = _align_scene_ids(
-                self._parse_response(retry_raw), plan_scene_ids
-            )
-            try:
-                validate_screenplay(draft, confirmed_plan)
-            except ScreenplayValidationError as retry_error:
-                raise AIProviderError(str(retry_error)) from retry_error
-
         return draft
+
+    def _retry_single_call(
+        self,
+        user_prompt: str,
+        plan_scene_ids: list[str],
+        confirmed_plan: AdaptationPlan,
+        error: ScreenplayValidationError,
+    ) -> ScreenplayDraft:
+        retry_prompt = (
+            f"{user_prompt}\n\n"
+            f"Your previous response was invalid.\n"
+            f"Validation error: {error}\n\n"
+            f"CRITICAL: You MUST use exactly these scene IDs "
+            f"in order: {plan_scene_ids}\n"
+            f"Please fix all issues and return a corrected "
+            f"screenplay JSON."
+        )
+        try:
+            retry_raw = self._llm_client.generate_json(
+                SYSTEM_PROMPT, retry_prompt
+            )
+        except StructuredLLMError as retry_error:
+            raise AIProviderError(str(retry_error)) from retry_error
+        except Exception as retry_error:
+            raise AIProviderError(
+                f"LLM screenplay retry failed: {retry_error}"
+            ) from retry_error
+
+        draft = _align_scene_ids(
+            self._parse_response(retry_raw), plan_scene_ids
+        )
+        try:
+            validate_screenplay(draft, confirmed_plan)
+        except ScreenplayValidationError as retry_error:
+            raise AIProviderError(str(retry_error)) from retry_error
+        return draft
+
+    # ── Per-scene path ────────────────────────────────────────
+
+    def _generate_per_scene(
+        self,
+        confirmed_plan: AdaptationPlan,
+        chapters: list[Chapter],
+    ) -> ScreenplayDraft:
+        from scriptweaver.services.progress import progress as _p
+
+        chapters_by_index = {ch.index: ch for ch in chapters}
+        scenes: list[ScreenplayScene] = []
+        all_notes: list[str] = []
+        plan_scenes = confirmed_plan.scenes
+
+        for i, plan_scene in enumerate(plan_scenes):
+            _p(f"正在生成第 {i+1}/{len(plan_scenes)} 场：{plan_scene.title}")
+            scene, notes = self._generate_scene(
+                plan_scene, chapters_by_index,
+            )
+            scene = replace(scene, id=plan_scene.id)
+            scenes.append(scene)
+            all_notes.extend(notes)
+
+        draft = ScreenplayDraft(
+            scenes=scenes,
+            revision_notes=all_notes,
+        )
+        try:
+            validate_screenplay(draft, confirmed_plan)
+        except ScreenplayValidationError as error:
+            raise AIProviderError(str(error)) from error
+        return draft
+
+    def _generate_scene(
+        self,
+        plan_scene,
+        chapters_by_index: dict[int, Chapter],
+    ) -> tuple[ScreenplayScene, list[str]]:
+        # Build prompt with only this scene's chapters
+        prompt = self._build_scene_prompt(plan_scene, chapters_by_index)
+
+        try:
+            raw = self._llm_client.generate_json(
+                PER_SCENE_SYSTEM_PROMPT, prompt
+            )
+        except StructuredLLMError as error:
+            raise AIProviderError(str(error)) from error
+        except Exception as error:
+            raise AIProviderError(
+                f"Scene {plan_scene.id} generation failed: {error}"
+            ) from error
+
+        heading_raw = raw.get("heading", {})
+        if not isinstance(heading_raw, dict):
+            heading_raw = {}
+        heading = _parse_heading(heading_raw, f"scene {plan_scene.id}")
+
+        beats = [
+            _parse_beat(b, f"scene {plan_scene.id}.beats[{i}]")
+            for i, b in enumerate(raw.get("beats", []))
+            if isinstance(b, dict)
+        ]
+
+        source_indexes = _normalize_chapter_indexes(
+            raw.get("source_chapter_indexes", plan_scene.source_chapter_indexes)
+        )
+
+        notes = raw.get("revision_notes", [])
+        if not isinstance(notes, list):
+            notes = []
+
+        scene = ScreenplayScene(
+            id=plan_scene.id,
+            heading=heading,
+            source_chapter_indexes=source_indexes,
+            character_ids=plan_scene.character_ids,
+            beats=beats,
+        )
+        return scene, [n for n in notes if isinstance(n, str)]
+
+    @staticmethod
+    def _build_scene_prompt(
+        plan_scene,
+        chapters_by_index: dict[int, Chapter],
+    ) -> str:
+        parts: list[str] = [
+            f"## Scene: {plan_scene.title}",
+            f"Scene ID: {plan_scene.id}",
+            f"Dramatic purpose: {plan_scene.dramatic_purpose}",
+            f"Character IDs: {plan_scene.character_ids}",
+            f"Source chapters: {plan_scene.source_chapter_indexes}",
+            "",
+            "You MUST use the EXACT source_chapter_indexes and "
+            "character_ids listed above. Chapter indexes are 1-based.",
+            "",
+            "## Source Chapters",
+        ]
+        for idx in plan_scene.source_chapter_indexes:
+            ch = chapters_by_index.get(idx)
+            if ch:
+                parts.append(
+                    f"\n### Chapter {ch.index}: {ch.title}\n{ch.content}"
+                )
+        return "\n".join(parts)
 
     @staticmethod
     def _build_user_prompt(
