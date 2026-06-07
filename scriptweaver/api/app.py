@@ -258,6 +258,8 @@ def create_app(
             ValueError,
         ) as error:
             _handle_error(400, str(error))
+        except RuntimeError as error:
+            _handle_error(502, str(error))
         _save_job(job)
         return _job_to_response(job)
 
