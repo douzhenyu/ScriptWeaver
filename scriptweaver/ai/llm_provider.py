@@ -73,6 +73,56 @@ allow_custom_answer (boolean, default true)
 Generate at least 1 entry per category. Every id must be unique within \
 its category. Use 1-based chapter indexes."""
 
+PER_CHAPTER_SYSTEM_PROMPT = """\
+You are a story analysis assistant. Analyze a SINGLE novel chapter and \
+produce a structured JSON analysis of its contents.
+
+Return a JSON object with exactly these keys:
+
+- "characters": list of objects with fields: \
+id (unique string, prefix with ch{chapter_index}_), name, role, description, \
+goal, motivation
+- "relationships": list of objects with fields: \
+id, source_character_id, target_character_id, description, \
+source_chapter_indexes (list with just this chapter index)
+- "key_events": list of objects with fields: \
+id, summary, character_ids, source_chapter_indexes (list with just this index)
+- "conflicts": list of objects with fields: \
+id, description, stakes, character_ids, source_chapter_indexes
+- "themes": list of objects with fields: \
+id, statement, source_chapter_indexes
+- "candidate_scenes": list of objects with fields: \
+id, title, summary, dramatic_purpose, location, time_hint, \
+character_ids, source_chapter_indexes
+- "uncertainties": list of objects with fields: \
+id, question, context, source_chapter_indexes, \
+options (list of objects with id, label, description, impact), \
+allow_custom_answer (boolean)
+
+This is chapter {chapter_index} of {total_chapters}. Focus only on what \
+appears in this chapter. Use 1-based chapter indexes."""
+
+MERGE_SYSTEM_PROMPT = """\
+You are a story analysis coordinator. Given per-chapter analyses from a \
+novel, merge them into a single, coherent story analysis.
+
+IMPORTANT tasks:
+1. Character deduplication: the same character appearing in multiple \
+   chapters must be merged into ONE entry with a stable id. Combine \
+   descriptions and motivations from all chapters. Aggregate \
+   source_chapter_indexes.
+2. Event linking: key events that span multiple chapters should be linked \
+   — use the same event id and aggregate source_chapter_indexes.
+3. Conflict and theme merging: deduplicate similar conflicts/themes across \
+   chapters.
+4. Candidate scene consolidation: combine or refine candidate scenes that \
+   draw from multiple chapters.
+
+Return a JSON object with the same keys as the analysis: characters, \
+relationships, key_events, conflicts, themes, candidate_scenes, \
+uncertainties. Every id must be unique within its category. \
+Use 1-based chapter indexes."""
+
 
 def _field_names(cls: type) -> set[str]:
     return {field.name for field in dataclasses.fields(cls)}
@@ -110,7 +160,15 @@ def _parse_uncertainty(raw: dict[str, Any], label: str) -> Uncertainty:
 
 
 class LLMAnalysisProvider:
-    """AI analysis provider backed by a structured LLM client."""
+    """AI analysis provider backed by a structured LLM client.
+
+    Uses Map-Reduce for 5+ chapters: per-chapter analysis (Map)
+    followed by a coordinator merge (Reduce). For fewer chapters
+    a single LLM call is more efficient and preserves cross-chapter
+    context natively.
+    """
+
+    MAP_THRESHOLD = 5
 
     def __init__(self, llm_client: StructuredLLMClient) -> None:
         self._llm_client = llm_client
@@ -125,8 +183,19 @@ class LLMAnalysisProvider:
             if not chapter.content.strip():
                 raise AIProviderInputError(f"{chapter.title} is empty")
 
-        user_prompt = self._build_user_prompt(chapters)
+        # Short novels: single LLM call preserves cross-chapter context
+        if len(chapters) < self.MAP_THRESHOLD:
+            return self._analyze_single_call(chapters)
 
+        # Long novels: Map-Reduce
+        return self._analyze_map_reduce(chapters)
+
+    # ── Single-call path (original behaviour) ─────────────────
+
+    def _analyze_single_call(
+        self, chapters: list[Chapter]
+    ) -> AIAnalysis:
+        user_prompt = self._build_user_prompt(chapters)
         try:
             raw = self._llm_client.generate_json(
                 SYSTEM_PROMPT, user_prompt
@@ -137,7 +206,97 @@ class LLMAnalysisProvider:
             raise AIProviderError(
                 f"LLM analysis failed: {error}"
             ) from error
+        return self._parse_response(raw)
 
+    # ── Map-Reduce path ───────────────────────────────────────
+
+    def _analyze_map_reduce(
+        self, chapters: list[Chapter]
+    ) -> AIAnalysis:
+        total = len(chapters)
+
+        # Phase 1 — Map: per-chapter analysis (sequential for now;
+        # callers can parallelize via ThreadPoolExecutor)
+        per_chapter: list[AIAnalysis] = []
+        for ch in chapters:
+            per_chapter.append(self._analyze_chapter(ch, total))
+
+        # Phase 2 — Reduce: merge into unified analysis
+        return self._merge_analyses(per_chapter, chapters)
+
+    def _analyze_chapter(
+        self, chapter: Chapter, total_chapters: int
+    ) -> AIAnalysis:
+        prompt = (
+            f"Chapter {chapter.index}: {chapter.title}\n\n"
+            f"{chapter.content}"
+        )
+        system = PER_CHAPTER_SYSTEM_PROMPT.format(
+            chapter_index=chapter.index,
+            total_chapters=total_chapters,
+        )
+        try:
+            raw = self._llm_client.generate_json(system, prompt)
+        except StructuredLLMError as error:
+            raise AIProviderError(
+                f"Chapter {chapter.index} analysis failed: {error}"
+            ) from error
+        except Exception as error:
+            raise AIProviderError(
+                f"Chapter {chapter.index} analysis error: {error}"
+            ) from error
+        return self._parse_response(raw)
+
+    def _merge_analyses(
+        self,
+        per_chapter: list[AIAnalysis],
+        chapters: list[Chapter],
+    ) -> AIAnalysis:
+        # Build a compact summary of per-chapter findings
+        parts: list[str] = [
+            "Merge the following per-chapter analyses into one unified "
+            "story analysis.",
+            f"Total chapters: {len(chapters)}",
+        ]
+        for i, (analysis, ch) in enumerate(
+            zip(per_chapter, chapters)
+        ):
+            parts.append(
+                f"\n## Chapter {ch.index}: {ch.title}"
+            )
+            parts.append(
+                f"Characters: "
+                f"{', '.join(c.name for c in analysis.characters)}"
+            )
+            parts.append(
+                f"Key events: "
+                f"{', '.join(e.summary[:80] for e in analysis.key_events)}"
+            )
+            parts.append(
+                f"Candidate scenes: "
+                f"{', '.join(s.title for s in analysis.candidate_scenes)}"
+            )
+            parts.append(
+                f"Conflicts: "
+                f"{', '.join(c.description[:80] for c in analysis.conflicts)}"
+            )
+            parts.append(
+                f"Themes: "
+                f"{', '.join(t.statement for t in analysis.themes)}"
+            )
+
+        try:
+            raw = self._llm_client.generate_json(
+                MERGE_SYSTEM_PROMPT, "\n".join(parts)
+            )
+        except StructuredLLMError as error:
+            raise AIProviderError(
+                f"Analysis merge failed: {error}"
+            ) from error
+        except Exception as error:
+            raise AIProviderError(
+                f"Analysis merge error: {error}"
+            ) from error
         return self._parse_response(raw)
 
     @staticmethod
