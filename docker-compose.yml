@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  scriptweaver:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      # Uncomment and fill in to use a real LLM:
+      # - SCRIPTWEAVER_API_KEY=sk-...
+      # - SCRIPTWEAVER_BASE_URL=https://api.deepseek.com
+      # - SCRIPTWEAVER_MODEL=deepseek-chat
+    restart: unless-stopped
