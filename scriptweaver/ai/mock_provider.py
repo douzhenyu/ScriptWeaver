@@ -257,7 +257,20 @@ class MockScreenplayProvider:
                         ),
                         Beat(
                             type="dialogue",
-                            text="待生成对白。",
+                            text="待生成对白 —— 第一句。",
+                            character_id=(
+                                plan_scene.character_ids[0]
+                                if plan_scene.character_ids
+                                else None
+                            ),
+                        ),
+                        Beat(
+                            type="action",
+                            text="角色环顾四周，气氛紧张。",
+                        ),
+                        Beat(
+                            type="dialogue",
+                            text="待生成对白 —— 第二句。",
                             character_id=(
                                 plan_scene.character_ids[0]
                                 if plan_scene.character_ids

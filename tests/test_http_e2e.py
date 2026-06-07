@@ -148,7 +148,7 @@ def test_full_workflow_via_http_with_three_chapters(client):
     assert len(screenplay["scenes"]) == 3
     # Each scene must have beats
     for scene in screenplay["scenes"]:
-        assert len(scene["beats"]) >= 2
+        assert len(scene["beats"]) >= 4
 
     # ── Stage 9: Export YAML ─────────────────────────────────
     r = client.get(

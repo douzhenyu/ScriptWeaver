@@ -97,6 +97,7 @@ def _parse_uncertainty(raw: dict[str, Any], label: str) -> Uncertainty:
     options = [
         _parse_item(UncertaintyOption, opt, f"{label}.options[{i}]")
         for i, opt in enumerate(options_raw)
+        if isinstance(opt, dict)
     ]
     filtered = _filter_fields(Uncertainty, raw)
     filtered["options"] = options
@@ -166,33 +167,40 @@ class LLMAnalysisProvider:
             characters=[
                 _parse_item(Character, c, f"characters[{i}]")
                 for i, c in enumerate(raw["characters"])
+                if isinstance(c, dict)
             ],
             relationships=[
                 _parse_item(
                     CharacterRelationship, r, f"relationships[{i}]"
                 )
                 for i, r in enumerate(raw["relationships"])
+                if isinstance(r, dict)
             ],
             key_events=[
                 _parse_item(KeyEvent, k, f"key_events[{i}]")
                 for i, k in enumerate(raw["key_events"])
+                if isinstance(k, dict)
             ],
             conflicts=[
                 _parse_item(Conflict, c, f"conflicts[{i}]")
                 for i, c in enumerate(raw["conflicts"])
+                if isinstance(c, dict)
             ],
             themes=[
                 _parse_item(Theme, t, f"themes[{i}]")
                 for i, t in enumerate(raw["themes"])
+                if isinstance(t, dict)
             ],
             candidate_scenes=[
                 _parse_item(
                     CandidateScene, s, f"candidate_scenes[{i}]"
                 )
                 for i, s in enumerate(raw["candidate_scenes"])
+                if isinstance(s, dict)
             ],
             uncertainties=[
                 _parse_uncertainty(u, f"uncertainties[{i}]")
                 for i, u in enumerate(raw["uncertainties"])
+                if isinstance(u, dict)
             ],
         )
