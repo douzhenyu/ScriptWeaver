@@ -102,6 +102,69 @@ def test_attach_chapters_requires_existing_job(client):
     assert response.status_code == 404
 
 
+# ── Upload file ───────────────────────────────────────────────────
+
+
+def test_upload_file_splits_and_attaches_chapters(client):
+    """Uploading a .txt file must split chapters and advance state."""
+    client.post("/jobs", json={"job_id": "job-001"})
+
+    content = (
+        "第一章 密信\n林照收到密信。\n\n"
+        "第二章 阻拦\n沈微阻止公开。"
+    )
+    response = client.post(
+        "/jobs/job-001/upload",
+        files={"file": ("novel.txt", content.encode("utf-8"), "text/plain")},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["state"] == "chapters_uploaded"
+    assert len(data["chapters"]) == 2
+    assert data["chapters"][0]["index"] == 1
+    assert data["chapters"][0]["title"] == "第一章 密信"
+
+
+def test_upload_rejects_wrong_state(client):
+    """Upload must be rejected when job is not in CREATED state."""
+    client.post("/jobs", json={"job_id": "job-001"})
+    # First upload succeeds
+    client.post(
+        "/jobs/job-001/upload",
+        files={
+            "file": ("n.txt", "第一章\n内容。".encode("utf-8"), "text/plain")
+        },
+    )
+    # Second upload must fail
+    response = client.post(
+        "/jobs/job-001/upload",
+        files={
+            "file": ("n.txt", "第一章\n内容。".encode("utf-8"), "text/plain")
+        },
+    )
+    assert response.status_code == 409
+
+
+def test_upload_returns_404_for_unknown_job(client):
+    response = client.post(
+        "/jobs/nonexistent/upload",
+        files={
+            "file": ("n.txt", "内容。".encode("utf-8"), "text/plain")
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_upload_rejects_empty_file(client):
+    client.post("/jobs", json={"job_id": "job-001"})
+    response = client.post(
+        "/jobs/job-001/upload",
+        files={"file": ("empty.txt", b"", "text/plain")},
+    )
+    assert response.status_code == 400
+
+
 # ── Generate analysis ────────────────────────────────────────────
 
 
