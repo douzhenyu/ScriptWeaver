@@ -268,3 +268,75 @@ def test_export_yaml_is_multiline_and_readable():
     assert "\n" in yaml_str
     assert "schema_version" in yaml_str
     assert "!!" not in yaml_str
+
+
+# ── PR 39: Schema doc matches ScreenplayDraft structure ─────────────
+
+
+def test_schema_doc_example_parses_and_matches_screenplay_draft():
+    """The complete example in the schema doc must parse as valid YAML
+    and the screenplay section must match ScreenplayDraft.to_dict()."""
+    import re
+    from pathlib import Path
+
+    doc_path = (
+        Path(__file__).parent.parent
+        / "docs" / "screenplay-yaml-schema.md"
+    )
+    content = doc_path.read_text()
+
+    # Extract the last (complete example) YAML block
+    blocks = list(re.finditer(r"```yaml\n(.*?)\n```", content, re.DOTALL))
+    assert len(blocks) >= 2, (
+        "Complete example YAML block not found in schema doc"
+    )
+    yaml_str = blocks[-1].group(1)
+    parsed = yaml.safe_load(yaml_str)
+
+    # Verify screenplay section has scenes (not scene_ids)
+    screenplay = parsed["screenplay"]
+    assert "scenes" in screenplay, (
+        "screenplay must have 'scenes', not 'scene_ids'"
+    )
+    assert "scene_ids" not in screenplay, (
+        "screenplay must not have 'scene_ids'"
+    )
+
+    # Verify scene structure matches ScreenplayDraft
+    first_scene = screenplay["scenes"][0]
+    assert first_scene["id"] is not None
+    assert "location" in first_scene["heading"]
+    assert "time" in first_scene["heading"]
+    assert "interior_exterior" in first_scene["heading"]
+    assert "source_chapter_indexes" in first_scene
+    assert "character_ids" in first_scene
+    assert "beats" in first_scene
+    assert len(first_scene["beats"]) >= 1
+    # Verify beat structure
+    beat = first_scene["beats"][0]
+    assert "type" in beat
+    assert "text" in beat
+    assert "character_id" in beat
+
+
+def test_schema_doc_has_no_scene_ids_references():
+    """The schema doc must not define scene_ids as a screenplay field
+    nor use it in the complete example. Other compound field names
+    like source_candidate_scene_ids are fine."""
+    from pathlib import Path
+
+    doc_path = (
+        Path(__file__).parent.parent
+        / "docs" / "screenplay-yaml-schema.md"
+    )
+    content = doc_path.read_text()
+
+    # The screenplay field definition table must NOT list scene_ids
+    assert "| `scene_ids` " not in content, (
+        "schema doc must not define 'scene_ids' as a screenplay field"
+    )
+    # The example must NOT use scene_ids at any level
+    import re
+    assert not re.search(r"^\s+scene_ids:", content, re.MULTILINE), (
+        "schema doc must not use 'scene_ids:' key"
+    )
