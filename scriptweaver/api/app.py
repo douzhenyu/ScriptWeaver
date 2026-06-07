@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel
 
 from scriptweaver.ai.provider import (
@@ -29,6 +29,10 @@ from scriptweaver.persistence.repository import (
 from scriptweaver.services.adaptation_service import (
     AdaptationService,
     AdaptationServiceError,
+)
+from scriptweaver.services.chapter_splitter import (
+    ChapterSplitterError,
+    split_chapters,
 )
 
 
@@ -208,6 +212,28 @@ def create_app(
         ]
         try:
             job = service.attach_chapters(job, chapters)
+        except AdaptationServiceError as error:
+            _handle_error(400, str(error))
+        except WorkflowTransitionError as error:
+            _handle_error(409, str(error))
+        _save_job(job)
+        return _job_to_response(job)
+
+    # ── Upload file ──────────────────────────────────────────
+
+    @app.post("/jobs/{job_id}/upload")
+    def upload_file(job_id: str, file: UploadFile = File(...)):
+        job = _get_job(job_id)
+        try:
+            content = file.file.read().decode("utf-8")
+        except UnicodeDecodeError:
+            _handle_error(400, "File must be UTF-8 encoded text")
+        try:
+            chapters = split_chapters(content)
+        except ChapterSplitterError as error:
+            _handle_error(400, str(error))
+        try:
+            job = service.attach_chapters(job, list(chapters))
         except AdaptationServiceError as error:
             _handle_error(400, str(error))
         except WorkflowTransitionError as error:
