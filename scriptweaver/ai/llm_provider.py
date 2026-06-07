@@ -118,9 +118,30 @@ IMPORTANT tasks:
 4. Candidate scene consolidation: combine or refine candidate scenes that \
    draw from multiple chapters.
 
-Return a JSON object with the same keys as the analysis: characters, \
-relationships, key_events, conflicts, themes, candidate_scenes, \
-uncertainties. Every id must be unique within its category. \
+Return a JSON object with exactly these keys:
+
+- "characters": list of objects with fields: \
+id (unique string), name, role, description, goal, motivation
+- "relationships": list of objects with fields: \
+id, source_character_id, target_character_id, description, \
+source_chapter_indexes
+- "key_events": list of objects with fields: \
+id, summary, character_ids, source_chapter_indexes
+- "conflicts": list of objects with fields: \
+id, description, stakes, character_ids, source_chapter_indexes
+- "themes": list of objects with fields: \
+id, statement, source_chapter_indexes
+- "candidate_scenes": list of objects with fields: \
+id, title, summary, dramatic_purpose, location, time_hint, \
+character_ids, source_chapter_indexes
+- "uncertainties": list of objects with fields: \
+id, question, context, source_chapter_indexes, \
+options (list of objects with id, label, description, impact), \
+allow_custom_answer (boolean)
+
+ALL character fields (id, name, role, description, goal, motivation) are \
+REQUIRED. Use the information in the chapter summaries to fill them in. \
+Every id must be unique within its category. \
 Use 1-based chapter indexes."""
 
 
@@ -136,10 +157,17 @@ def _filter_fields(cls: type, raw: dict[str, Any]) -> dict[str, Any]:
 def _parse_item(cls: type, raw: dict[str, Any], label: str) -> Any:
     try:
         return cls(**_filter_fields(cls, raw))
-    except TypeError as error:
+    except TypeError:
+        # Provide defaults for common missing fields (LLM may omit optionals)
+        if cls is Character:
+            raw = {
+                "role": "", "description": "", "goal": "",
+                "motivation": "", **raw,
+            }
+            return cls(**_filter_fields(cls, raw))
         raise AIProviderError(
-            f"Failed to parse {label}: {error}"
-        ) from error
+            f"Failed to parse {label}: missing required fields"
+        )
 
 
 def _parse_uncertainty(raw: dict[str, Any], label: str) -> Uncertainty:
@@ -266,7 +294,10 @@ class LLMAnalysisProvider:
             )
             parts.append(
                 f"Characters: "
-                f"{', '.join(c.name for c in analysis.characters)}"
+                + "; ".join(
+                    f"{c.name}({c.role}): {c.goal}, {c.motivation[:60]}"
+                    for c in analysis.characters
+                )
             )
             parts.append(
                 f"Key events: "

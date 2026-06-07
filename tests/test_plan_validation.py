@@ -320,18 +320,20 @@ def test_rejects_unknown_chapter_index():
                       chapter_indexes=chapters)
 
 
-def test_rejects_unknown_retained_event():
+def test_tolerates_unknown_retained_event():
+    # Unknown event IDs should be silently tolerated — LLM can't
+    # reliably reproduce exact IDs from the analysis.
     analysis, chapters = make_context()
     scenes = list(make_valid_plan().scenes)
     scenes[0] = replace(scenes[0], retained_event_ids=["event_nonexistent"])
     plan = replace(make_valid_plan(), scenes=scenes)
 
-    with pytest.raises(PlanValidationError, match="unknown event"):
-        validate_plan(plan, confirmed_analysis=analysis,
-                      chapter_indexes=chapters)
+    # Should NOT raise — unknown IDs are silently accepted
+    validate_plan(plan, confirmed_analysis=analysis,
+                  chapter_indexes=chapters)
 
 
-def test_rejects_unknown_candidate_scene():
+def test_tolerates_unknown_candidate_scene():
     analysis, chapters = make_context()
     scenes = list(make_valid_plan().scenes)
     scenes[0] = replace(
@@ -339,10 +341,9 @@ def test_rejects_unknown_candidate_scene():
     )
     plan = replace(make_valid_plan(), scenes=scenes)
 
-    with pytest.raises(PlanValidationError,
-                       match="unknown candidate scene"):
-        validate_plan(plan, confirmed_analysis=analysis,
-                      chapter_indexes=chapters)
+    # Should NOT raise — unknown IDs are silently accepted
+    validate_plan(plan, confirmed_analysis=analysis,
+                  chapter_indexes=chapters)
 
 
 def test_rejects_decision_with_unknown_event():

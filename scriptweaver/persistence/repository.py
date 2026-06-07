@@ -16,15 +16,186 @@ def _job_to_dict(job: AdaptationJob) -> dict[str, Any]:
 
 def _job_from_dict(data: dict[str, Any]) -> AdaptationJob:
     """Deserialize an AdaptationJob from a JSON-compatible dict."""
+    from scriptweaver.domain.models import (
+        AdaptationPlan,
+        AIAnalysis,
+        Beat,
+        CandidateScene,
+        Chapter,
+        Character,
+        CharacterRelationship,
+        Conflict,
+        KeyEvent,
+        PlanReviewQuestion,
+        SceneHeading,
+        ScenePlan,
+        ScreenplayDraft,
+        ScreenplayScene,
+        Theme,
+        Uncertainty,
+        UncertaintyOption,
+        UserConfirmations,
+    )
     from scriptweaver.domain.workflow import AdaptationState
 
     field_names = {f.name for f in fields(AdaptationJob)}
     filtered: dict[str, Any] = {
         k: v for k, v in data.items() if k in field_names
     }
-    # Convert state from string back to enum
     if "state" in filtered and isinstance(filtered["state"], str):
         filtered["state"] = AdaptationState(filtered["state"])
+
+    # Reconstruct chapters
+    if "chapters" in filtered and isinstance(filtered["chapters"], list):
+        filtered["chapters"] = [
+            Chapter(**ch) if isinstance(ch, dict) else ch
+            for ch in filtered["chapters"]
+        ]
+
+    # Reconstruct AIAnalysis
+    for key in ("ai_analysis", "confirmed_analysis"):
+        val = filtered.get(key)
+        if isinstance(val, dict):
+            filtered[key] = AIAnalysis(
+                characters=[
+                    Character(**c)
+                    for c in val.get("characters", [])
+                    if isinstance(c, dict)
+                ],
+                relationships=[
+                    CharacterRelationship(**r)
+                    for r in val.get("relationships", [])
+                    if isinstance(r, dict)
+                ],
+                key_events=[
+                    KeyEvent(**e)
+                    for e in val.get("key_events", [])
+                    if isinstance(e, dict)
+                ],
+                conflicts=[
+                    Conflict(**c)
+                    for c in val.get("conflicts", [])
+                    if isinstance(c, dict)
+                ],
+                themes=[
+                    Theme(**t)
+                    for t in val.get("themes", [])
+                    if isinstance(t, dict)
+                ],
+                candidate_scenes=[
+                    CandidateScene(**s)
+                    for s in val.get("candidate_scenes", [])
+                    if isinstance(s, dict)
+                ],
+                uncertainties=[
+                    Uncertainty(
+                        **{k: v for k, v in u.items() if k != "options"},
+                        options=[
+                            UncertaintyOption(**o)
+                            for o in u.get("options", [])
+                            if isinstance(o, dict)
+                        ],
+                    )
+                    for u in val.get("uncertainties", [])
+                    if isinstance(u, dict)
+                ],
+            )
+
+    # Reconstruct AdaptationPlan
+    plan = filtered.get("adaptation_plan")
+    if isinstance(plan, dict):
+        from scriptweaver.domain.models import AdaptationDecision
+
+        def _parse_decisions(raw):
+            return [
+                AdaptationDecision(**d)
+                for d in (raw or [])
+                if isinstance(d, dict)
+            ]
+
+        filtered["adaptation_plan"] = AdaptationPlan(
+            target_format=plan.get("target_format", ""),
+            structure=plan.get("structure", ""),
+            scenes=[
+                ScenePlan(
+                    **{k: v for k, v in s.items()
+                       if k not in (
+                           "compression_choices", "merge_choices",
+                           "rewrite_choices", "review_questions",
+                       )},
+                    compression_choices=_parse_decisions(
+                        s.get("compression_choices")
+                    ),
+                    merge_choices=_parse_decisions(
+                        s.get("merge_choices")
+                    ),
+                    rewrite_choices=_parse_decisions(
+                        s.get("rewrite_choices")
+                    ),
+                    review_questions=[
+                        PlanReviewQuestion(**q)
+                        for q in s.get("review_questions", [])
+                        if isinstance(q, dict)
+                    ],
+                )
+                for s in plan.get("scenes", [])
+                if isinstance(s, dict)
+            ],
+            review_questions=[
+                PlanReviewQuestion(**q)
+                for q in plan.get("review_questions", [])
+                if isinstance(q, dict)
+            ],
+        )
+
+    # Reconstruct ScreenplayDraft
+    draft = filtered.get("screenplay_draft")
+    if isinstance(draft, dict):
+        filtered["screenplay_draft"] = ScreenplayDraft(
+            scenes=[
+                ScreenplayScene(
+                    id=s.get("id", ""),
+                    heading=SceneHeading(
+                        **s.get("heading", {})
+                    ) if isinstance(s.get("heading"), dict)
+                    else SceneHeading(location="", time="",
+                                      interior_exterior="INT"),
+                    source_chapter_indexes=s.get(
+                        "source_chapter_indexes", []
+                    ),
+                    character_ids=s.get("character_ids", []),
+                    beats=[
+                        Beat(**b)
+                        for b in s.get("beats", [])
+                        if isinstance(b, dict)
+                    ],
+                )
+                for s in draft.get("scenes", [])
+                if isinstance(s, dict)
+            ],
+            revision_notes=list(draft.get("revision_notes", [])),
+        )
+
+    # Reconstruct UserConfirmations
+    uc = filtered.get("user_confirmations")
+    if isinstance(uc, dict):
+        from scriptweaver.domain.models import UncertaintyResolution
+
+        filtered["user_confirmations"] = UserConfirmations(
+            uncertainty_resolutions=[
+                UncertaintyResolution(**r)
+                for r in uc.get("uncertainty_resolutions", [])
+                if isinstance(r, dict)
+            ],
+            accepted_character_ids=list(
+                uc.get("accepted_character_ids", [])
+            ),
+            required_plot_points=list(
+                uc.get("required_plot_points", [])
+            ),
+            notes=uc.get("notes"),
+        )
+
     return AdaptationJob(**filtered)
 
 
