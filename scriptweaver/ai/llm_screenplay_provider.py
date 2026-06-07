@@ -360,6 +360,13 @@ class LLMScreenplayProvider:
             for i, b in enumerate(raw.get("beats", []))
             if isinstance(b, dict)
         ]
+        # Auto-correct: action beats must not have character_id
+        beats = [
+            replace(b, character_id=None)
+            if b.type in ("action", "transition") and b.character_id
+            else b
+            for b in beats
+        ]
 
         source_indexes = _normalize_chapter_indexes(
             raw.get("source_chapter_indexes", plan_scene.source_chapter_indexes)
