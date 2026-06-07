@@ -45,11 +45,20 @@ def make_valid_response() -> dict:
                 "beats": [
                     {
                         "type": "action",
-                        "text": "林照拆开密信。",
+                        "text": "林照拆开密信，手指微微颤抖。",
                     },
                     {
                         "type": "dialogue",
                         "text": "这不是父亲的笔迹。",
+                        "character_id": "char_001",
+                    },
+                    {
+                        "type": "action",
+                        "text": "她将信纸翻到背面，发现一行小字。",
+                    },
+                    {
+                        "type": "dialogue",
+                        "text": "难道……他还活着？",
                         "character_id": "char_001",
                     },
                 ],
@@ -97,7 +106,7 @@ def test_generates_screenplay_from_valid_response():
     assert len(draft.scenes) == 1
     assert draft.scenes[0].id == "scene_001"
     assert draft.scenes[0].heading.location == "茶馆"
-    assert len(draft.scenes[0].beats) == 2
+    assert len(draft.scenes[0].beats) == 4
 
 
 def test_parses_scene_heading():

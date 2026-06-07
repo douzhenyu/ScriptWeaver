@@ -31,7 +31,8 @@ and the original chapters, produce a structured adaptation plan.
 Return a JSON object with exactly these keys:
 
 - "target_format": string (e.g., "1-3 minute short drama")
-- "structure": string (e.g., "3 scenes, linear narrative")
+- "structure": string describing the overall narrative structure
+  (e.g., "5 scenes, linear narrative with flashback")
 - "scenes": list of scene objects, each with fields:
   id (unique string), scene_order (int), title (string),
   dramatic_purpose (string), character_ids (list of strings),
@@ -52,6 +53,13 @@ A decision object has fields:
 A question object has fields:
   id (unique string), question (string), context (string),
   related_scene_ids (list of strings)
+
+IMPORTANT — Scene count guidance:
+- Typically 1-2 scenes per chapter, depending on content density.
+- A novel with 5+ substantial chapters should have at least 5 scenes.
+- Do NOT default to 3 scenes — adapt to the actual chapter count and
+  complexity of the source material.
+- More chapters with rich events → more scenes.
 
 Every id must be unique within its category. Use 1-based indexes."""
 
@@ -86,18 +94,22 @@ def _parse_scene(raw: dict[str, Any], label: str) -> ScenePlan:
     compression = [
         _parse_decision(d, f"{label}.compression_choices[{i}]")
         for i, d in enumerate(raw.get("compression_choices", []))
+        if isinstance(d, dict)
     ]
     merge = [
         _parse_decision(d, f"{label}.merge_choices[{i}]")
         for i, d in enumerate(raw.get("merge_choices", []))
+        if isinstance(d, dict)
     ]
     rewrite = [
         _parse_decision(d, f"{label}.rewrite_choices[{i}]")
         for i, d in enumerate(raw.get("rewrite_choices", []))
+        if isinstance(d, dict)
     ]
     review = [
         _parse_question(q, f"{label}.review_questions[{i}]")
         for i, q in enumerate(raw.get("review_questions", []))
+        if isinstance(q, dict)
     ]
 
     filtered = _filter_fields(ScenePlan, raw)
@@ -144,17 +156,47 @@ class LLMPlanProvider:
                 f"LLM plan generation failed: {error}"
             ) from error
 
+        valid_chapter_indexes = {chapter.index for chapter in chapters}
+
         plan = self._parse_response(raw)
         try:
             validate_plan(
                 plan,
                 confirmed_analysis=confirmed_analysis,
-                chapter_indexes={
-                    chapter.index for chapter in chapters
-                },
+                chapter_indexes=valid_chapter_indexes,
             )
         except PlanValidationError as error:
-            raise AIProviderError(str(error)) from error
+            # Retry once with validation error feedback
+            retry_prompt = (
+                f"{user_prompt}\n\n"
+                f"Your previous response was invalid.\n"
+                f"Validation error: {error}\n\n"
+                f"Valid chapter indexes are: "
+                f"{sorted(valid_chapter_indexes)}\n"
+                f"Please fix all issues and return a corrected "
+                f"adaptation plan JSON."
+            )
+            try:
+                retry_raw = self._llm_client.generate_json(
+                    SYSTEM_PROMPT, retry_prompt
+                )
+            except StructuredLLMError as retry_error:
+                raise AIProviderError(str(retry_error)) from retry_error
+            except Exception as retry_error:
+                raise AIProviderError(
+                    f"LLM plan retry failed: {retry_error}"
+                ) from retry_error
+
+            plan = self._parse_response(retry_raw)
+            try:
+                validate_plan(
+                    plan,
+                    confirmed_analysis=confirmed_analysis,
+                    chapter_indexes=valid_chapter_indexes,
+                )
+            except PlanValidationError as retry_error:
+                raise AIProviderError(str(retry_error)) from retry_error
+
         return plan
 
     @staticmethod
@@ -245,6 +287,14 @@ class LLMPlanProvider:
                 parts.append("\n### Author Notes")
                 parts.append(user_confirmations.notes)
 
+        parts.append(
+            f"\n## Scene Count\n"
+            f"This novel has {len(chapters)} chapters. "
+            f"Your plan should have at least {max(3, len(chapters))} "
+            f"scenes — typically 1-2 scenes per chapter. "
+            f"Do NOT default to 3 scenes. Scale up with the chapter count."
+        )
+
         parts.append("\n## Source Chapters")
         for chapter in chapters:
             parts.append(
@@ -268,11 +318,13 @@ class LLMPlanProvider:
         scenes = [
             _parse_scene(s, f"scenes[{i}]")
             for i, s in enumerate(raw["scenes"])
+            if isinstance(s, dict)
         ]
 
         review_questions = [
             _parse_question(q, f"review_questions[{i}]")
             for i, q in enumerate(raw.get("review_questions", []))
+            if isinstance(q, dict)
         ]
 
         try:

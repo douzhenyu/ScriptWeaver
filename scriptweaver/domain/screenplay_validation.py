@@ -101,6 +101,14 @@ def validate_screenplay(
                     f"scene source_chapter_indexes"
                 )
 
+        # Minimum beat count — prevent thin / summary-level output
+        if len(s.beats) < 4:
+            raise ScreenplayValidationError(
+                f"scene {s.id}: must have at least 4 beats, "
+                f"got {len(s.beats)}. Expand each key moment and dialogue "
+                f"into concrete beats."
+            )
+
         # Beats
         for i, beat in enumerate(s.beats):
             label = f"scene {s.id} beat {i}"

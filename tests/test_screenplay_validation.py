@@ -54,10 +54,16 @@ def make_valid_draft() -> ScreenplayDraft:
                 source_chapter_indexes=[1],
                 character_ids=["char_001"],
                 beats=[
-                    Beat(type="action", text="林照拆开密信。"),
+                    Beat(type="action", text="林照拆开密信，手指微微颤抖。"),
                     Beat(
                         type="dialogue",
                         text="这不是父亲的笔迹。",
+                        character_id="char_001",
+                    ),
+                    Beat(type="action", text="她翻到信纸背面，发现一行小字。"),
+                    Beat(
+                        type="dialogue",
+                        text="难道……他还活着？",
                         character_id="char_001",
                     ),
                 ],
@@ -70,11 +76,17 @@ def make_valid_draft() -> ScreenplayDraft:
                 source_chapter_indexes=[2],
                 character_ids=["char_001", "char_002"],
                 beats=[
-                    Beat(type="action", text="沈微拦住林照。"),
+                    Beat(type="action", text="沈微从暗处走出，拦住林照。"),
                     Beat(
                         type="dialogue",
-                        text="你不能公开。",
+                        text="你不能公开这封信。",
                         character_id="char_002",
+                    ),
+                    Beat(type="action", text="林照后退一步，握紧信纸。"),
+                    Beat(
+                        type="dialogue",
+                        text="你一直在跟踪我？",
+                        character_id="char_001",
                     ),
                 ],
             ),
@@ -200,6 +212,18 @@ def test_rejects_invalid_interior_exterior():
 
 
 # ── Beat validation ─────────────────────────────────────────────────
+
+
+def test_rejects_too_few_beats():
+    draft = make_valid_draft()
+    scenes = list(draft.scenes)
+    # Reduce to 3 beats — below the minimum of 4
+    scenes[0] = replace(scenes[0], beats=scenes[0].beats[:3])
+    draft = replace(draft, scenes=scenes)
+
+    with pytest.raises(ScreenplayValidationError,
+                       match="must have at least 4 beats"):
+        validate_screenplay(draft, make_valid_plan())
 
 
 def test_rejects_invalid_beat_type():

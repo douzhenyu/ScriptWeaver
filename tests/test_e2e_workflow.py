@@ -114,7 +114,7 @@ def test_full_workflow_from_create_to_export():
     assert len(draft.revision_notes) == 3
     # Verify beats are present
     for scene in draft.scenes:
-        assert len(scene.beats) >= 2
+        assert len(scene.beats) >= 4
 
     # ── Stage 9: Export to YAML ──────────────────────────────
     metadata = {
