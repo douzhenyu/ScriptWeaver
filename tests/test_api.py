@@ -146,12 +146,33 @@ def test_confirm_analysis(client):
         },
     )
     client.post("/jobs/job-001/analyze")
+    # Answer uncertainty before confirming
+    client.post(
+        "/jobs/job-001/uncertainty-answer",
+        json={
+            "uncertainty_id": "uncertainty_001",
+            "selected_option_id": "option_001",
+        },
+    )
 
     response = client.post("/jobs/job-001/confirm-analysis")
 
     assert response.status_code == 200
     data = response.json()
     assert data["state"] == "analysis_confirmed"
+
+
+# ── PR 37: Reject confirm-analysis when uncertainties unresolved ──
+
+
+def test_confirm_analysis_rejects_without_answering_uncertainties(client):
+    """Confirming analysis without resolving uncertainties must return 400."""
+    _bootstrap_to_analysis_generated(client)
+
+    response = client.post("/jobs/job-001/confirm-analysis")
+
+    assert response.status_code == 400
+    assert "Unresolved uncertainties" in response.json()["detail"]
 
 
 # ── Next uncertainty ─────────────────────────────────────────────
@@ -434,6 +455,14 @@ def _bootstrap_to_analysis_generated(client):
 
 def _bootstrap_to_analysis_confirmed(client):
     _bootstrap_to_analysis_generated(client)
+    # Answer uncertainty before confirming
+    client.post(
+        "/jobs/job-001/uncertainty-answer",
+        json={
+            "uncertainty_id": "uncertainty_001",
+            "selected_option_id": "option_001",
+        },
+    )
     client.post("/jobs/job-001/confirm-analysis")
 
 

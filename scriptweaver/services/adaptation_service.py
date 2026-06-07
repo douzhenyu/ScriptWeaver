@@ -84,6 +84,23 @@ class AdaptationService:
 
         ensure_transition_allowed(job.state, AdaptationState.ANALYSIS_CONFIRMED)
 
+        # Require all uncertainties to be resolved before confirmation
+        if job.ai_analysis.uncertainties:
+            resolved_ids: set[str] = set()
+            if job.user_confirmations is not None:
+                for r in job.user_confirmations.uncertainty_resolutions:
+                    resolved_ids.add(r.uncertainty_id)
+            unresolved = [
+                u.id
+                for u in job.ai_analysis.uncertainties
+                if u.id not in resolved_ids
+            ]
+            if unresolved:
+                raise AdaptationServiceError(
+                    "Unresolved uncertainties: "
+                    + ", ".join(unresolved)
+                )
+
         confirmed = deepcopy(job.ai_analysis)
 
         if job.user_confirmations is not None:

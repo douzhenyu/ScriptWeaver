@@ -188,6 +188,13 @@ def test_full_workflow_data_integrity(client):
         },
     )
     client.post("/jobs/http-e2e-002/analyze")
+    client.post(
+        "/jobs/http-e2e-002/uncertainty-answer",
+        json={
+            "uncertainty_id": "uncertainty_001",
+            "selected_option_id": "option_001",
+        },
+    )
     client.post("/jobs/http-e2e-002/confirm-analysis")
     client.post("/jobs/http-e2e-002/generate-plan")
     client.post(

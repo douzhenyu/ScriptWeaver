@@ -180,6 +180,13 @@ def test_workflow_preserves_complete_history():
     job = service.attach_chapters(job, chapters)
     job = service.generate_analysis(job)
     raw_analysis = job.ai_analysis
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
     job = service.confirm_analysis(job)
     job = service.generate_plan(job)
     job = service.confirm_plan(job, job.adaptation_plan)
@@ -231,6 +238,14 @@ def test_workflow_with_minimal_input():
         [Chapter(index=1, title="单章", content="最短内容。")],
     )
     job = service.generate_analysis(job)
+    # Answer uncertainty before confirming
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
     # Confirm analysis derived from ai_analysis
     job = service.confirm_analysis(job)
     job = service.generate_plan(job)
