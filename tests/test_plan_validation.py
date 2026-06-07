@@ -400,7 +400,9 @@ def test_rejects_duplicate_decision_id_within_scene():
                       chapter_indexes=chapters)
 
 
-def test_rejects_duplicate_review_question_id():
+def test_accepts_duplicate_review_question_ids():
+    """Duplicate review question IDs are silently de-duplicated to
+    tolerate LLM-generated plan inconsistencies."""
     analysis, chapters = make_context()
     rq = PlanReviewQuestion(
         id="dup_rq", question="Q", context="C",
@@ -410,10 +412,9 @@ def test_rejects_duplicate_review_question_id():
         review_questions=[rq, rq],
     )
 
-    with pytest.raises(PlanValidationError,
-                       match="Duplicate review question id"):
-        validate_plan(plan, confirmed_analysis=analysis,
-                      chapter_indexes=chapters)
+    # Must not raise — duplicates are silently skipped
+    validate_plan(plan, confirmed_analysis=analysis,
+                  chapter_indexes=chapters)
 
 
 def test_rejects_blank_decision_id():
