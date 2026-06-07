@@ -22,6 +22,10 @@ from scriptweaver.domain.uncertainty_validation import (
 )
 from scriptweaver.domain.workflow import WorkflowTransitionError
 from scriptweaver.export.yaml_exporter import export_job_to_yaml
+from scriptweaver.persistence.repository import (
+    InMemoryJobRepository,
+    JobRepository,
+)
 from scriptweaver.services.adaptation_service import (
     AdaptationService,
     AdaptationServiceError,
@@ -130,6 +134,7 @@ def create_app(
     ai_provider: AIAnalysisProvider,
     plan_provider: AdaptationPlanProvider | None = None,
     screenplay_provider: ScreenplayProvider | None = None,
+    repository: JobRepository | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="ScriptWeaver API",
@@ -145,15 +150,16 @@ def create_app(
         plan_provider=plan_provider,
         screenplay_provider=screenplay_provider,
     )
-    jobs: dict[str, Any] = {}
+    repo = repository if repository is not None else InMemoryJobRepository()
 
     def _get_job(job_id: str):
-        if job_id not in jobs:
+        job = repo.get(job_id)
+        if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
-        return jobs[job_id]
+        return job
 
     def _save_job(job):
-        jobs[job.id] = job
+        repo.save(job)
         return job
 
     def _job_to_response(job):
@@ -172,7 +178,7 @@ def create_app(
 
     @app.post("/jobs", status_code=201)
     def create_job(req: CreateJobRequest):
-        if req.job_id in jobs:
+        if repo.exists(req.job_id):
             raise HTTPException(
                 status_code=409,
                 detail="Job with this ID already exists",
