@@ -6,6 +6,8 @@
 
 **Human-in-the-loop AI 小说→剧本改编引擎**。将长篇小说的章节文本，通过多阶段 AI 分析与结构化改编规划，自动生成可编辑的分场剧本草稿。
 
+> 📺 **视频演示：** [ScriptWeaver 项目介绍与演示](https://www.bilibili.com/video/BV1QhEb6JENK/)
+
 ---
 
 ## 目录
