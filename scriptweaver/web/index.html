@@ -175,19 +175,19 @@ function renderAnalysis(a) {
   let h='';
   if (a.characters&&a.characters.length) {
     h+='<h3>👤 人物 ('+a.characters.length+')</h3>';
-    a.characters.forEach(c=>h+='<span class="tag blue">'+c.name+' ('+c.role+')</span> '));
+    a.characters.forEach(c=>h+='<span class="tag blue">'+c.name+' ('+c.role+')</span> ');
   }
   if (a.key_events&&a.key_events.length) {
     h+='<h3>📌 关键事件</h3>';
-    a.key_events.forEach(e=>h+='<div class="tag">'+e.summary+'</div>'));
+    a.key_events.forEach(e=>h+='<div class="tag">'+e.summary+'</div>');
   }
   if (a.conflicts&&a.conflicts.length) {
     h+='<h3>⚡ 冲突</h3>';
-    a.conflicts.forEach(c=>h+='<div class="tag yellow">'+c.description.substring(0,60)+'…</div>'));
+    a.conflicts.forEach(c=>h+='<div class="tag yellow">'+c.description.substring(0,60)+'…</div>');
   }
   if (a.themes&&a.themes.length) {
     h+='<h3>💡 主题</h3>';
-    a.themes.forEach(t=>h+='<div class="tag green">'+t.statement+'</div>'));
+    a.themes.forEach(t=>h+='<div class="tag green">'+t.statement+'</div>');
   }
   if (a.uncertainties&&a.uncertainties.length) {
     h+='<h3>❓ 不确定项 ('+a.uncertainties.length+')</h3>';
