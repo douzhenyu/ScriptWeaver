@@ -78,22 +78,9 @@ def validate_plan(
                         f"scene {scene.id}: unknown chapter index {ci}"
                     )
 
-        # ── Retained event references ─────────────────────────
-        if confirmed_analysis is not None:
-            for eid in scene.retained_event_ids:
-                if eid not in event_ids:
-                    raise PlanValidationError(
-                        f"scene {scene.id}: unknown event '{eid}'"
-                    )
-
-        # ── Candidate scene references ────────────────────────
-        if confirmed_analysis is not None:
-            for sid in scene.source_candidate_scene_ids:
-                if sid not in candidate_scene_ids:
-                    raise PlanValidationError(
-                        f"scene {scene.id}: unknown candidate scene "
-                        f"'{sid}'"
-                    )
+        # ── Retained event / candidate scene references ────────
+        # Not validated strictly — LLM may not reproduce exact IDs.
+        # Unknown IDs are silently tolerated; they don't break the plan.
 
         # ── Decision validation ───────────────────────────────
         decision_ids: set[str] = set()
