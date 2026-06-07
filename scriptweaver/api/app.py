@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Query, Response, UploadFile
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from scriptweaver.ai.provider import (
@@ -139,6 +140,7 @@ def create_app(
     plan_provider: AdaptationPlanProvider | None = None,
     screenplay_provider: ScreenplayProvider | None = None,
     repository: JobRepository | None = None,
+    static_dir: str | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="ScriptWeaver API",
@@ -371,10 +373,17 @@ def create_app(
             media_type="application/x-yaml",
         )
 
+    # ── Static files ──────────────────────────────────────────
+
+    if static_dir is not None:
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
     return app
 
 
 # ── Default application instance ──────────────────────────────────
+
+from pathlib import Path as _Path  # noqa: E402
 
 from scriptweaver.ai.mock_provider import (  # noqa: E402
     MockAIAnalysisProvider,
@@ -382,8 +391,10 @@ from scriptweaver.ai.mock_provider import (  # noqa: E402
     MockScreenplayProvider,
 )
 
+_web_dir = _Path(__file__).parent.parent / "web"
 app = create_app(
     MockAIAnalysisProvider(),
     plan_provider=MockPlanProvider(),
     screenplay_provider=MockScreenplayProvider(),
+    static_dir=str(_web_dir) if _web_dir.is_dir() else None,
 )
