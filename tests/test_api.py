@@ -126,8 +126,8 @@ def test_upload_file_splits_and_attaches_chapters(client):
     assert data["chapters"][0]["title"] == "第一章 密信"
 
 
-def test_upload_rejects_wrong_state(client):
-    """Upload must be rejected when job is not in CREATED state."""
+def test_upload_is_idempotent(client):
+    """Re-uploading from the same state is allowed (idempotent retry)."""
     client.post("/jobs", json={"job_id": "job-001"})
     # First upload succeeds
     client.post(
@@ -136,14 +136,14 @@ def test_upload_rejects_wrong_state(client):
             "file": ("n.txt", "第一章\n内容。".encode("utf-8"), "text/plain")
         },
     )
-    # Second upload must fail
+    # Second upload is idempotent — self-transition
     response = client.post(
         "/jobs/job-001/upload",
         files={
             "file": ("n.txt", "第一章\n内容。".encode("utf-8"), "text/plain")
         },
     )
-    assert response.status_code == 409
+    assert response.status_code == 200
 
 
 def test_upload_returns_404_for_unknown_job(client):
@@ -488,12 +488,13 @@ def test_confirm_plan_missing_decision_id(client):
 # ── Error recovery: job not mutated on error ─────────────────────
 
 
-def test_job_state_preserved_after_error(client):
+def test_analyze_is_idempotent(client):
+    """Re-analyzing from the same state is allowed (idempotent retry)."""
     _bootstrap_to_analysis_generated(client)
 
-    # Try invalid confirm — should be rejected
+    # Calling analyze again should succeed (self-transition)
     response = client.post("/jobs/job-001/analyze")
-    assert response.status_code == 409
+    assert response.status_code == 200
 
     # Job should still be in ANALYSIS_GENERATED
     response = client.get("/jobs/job-001")

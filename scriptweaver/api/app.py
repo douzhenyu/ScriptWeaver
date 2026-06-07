@@ -316,6 +316,8 @@ def create_app(
             job = service.generate_analysis(job)
         except WorkflowTransitionError as error:
             _handle_error(409, str(error))
+        except RuntimeError as error:
+            _handle_error(502, str(error))
         _save_job(job)
         return _job_to_response(job)
 
@@ -379,6 +381,8 @@ def create_app(
             _handle_error(409, str(error))
         except AdaptationServiceError as error:
             _handle_error(400, str(error))
+        except RuntimeError as error:
+            _handle_error(502, str(error))
         _save_job(job)
         return _job_to_response(job)
 
@@ -408,6 +412,8 @@ def create_app(
             _handle_error(409, str(error))
         except AdaptationServiceError as error:
             _handle_error(400, str(error))
+        except RuntimeError as error:
+            _handle_error(502, str(error))
         _save_job(job)
         return _job_to_response(job)
 

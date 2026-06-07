@@ -401,7 +401,8 @@ def test_rejects_duplicate_decision_id_within_scene():
                       chapter_indexes=chapters)
 
 
-def test_rejects_duplicate_review_question_id():
+def test_deduplicates_review_question_ids():
+    """Duplicate review question IDs are auto-deduped, not rejected."""
     analysis, chapters = make_context()
     rq = PlanReviewQuestion(
         id="dup_rq", question="Q", context="C",
@@ -411,10 +412,9 @@ def test_rejects_duplicate_review_question_id():
         review_questions=[rq, rq],
     )
 
-    with pytest.raises(PlanValidationError,
-                       match="Duplicate review question id"):
-        validate_plan(plan, confirmed_analysis=analysis,
-                      chapter_indexes=chapters)
+    # Should NOT raise — duplicate IDs are silently renamed
+    validate_plan(plan, confirmed_analysis=analysis,
+                  chapter_indexes=chapters)
 
 
 def test_rejects_blank_decision_id():
