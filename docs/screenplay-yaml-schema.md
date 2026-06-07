@@ -266,10 +266,7 @@ Fields:
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `accepted_character_ids` | list | no | Characters accepted by the user. |
-| `rejected_character_ids` | list | no | Characters rejected by the user. |
-| `edited_conflicts` | list | no | User-edited conflict descriptions. |
 | `required_plot_points` | list | no | Plot points the final script must preserve. |
-| `style_preferences` | object | no | Tone, pacing, genre, or format preferences. |
 | `notes` | string | no | Free-form user guidance. |
 | `uncertainty_resolutions` | list | no | Ordered answers to AI-raised uncertainties. |
 
@@ -349,12 +346,43 @@ Fields:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `scene_ids` | list | yes | Ordered scene identifiers from the adaptation plan. |
+| `scenes` | list | yes | Ordered screenplay scenes with headings and beats. |
 | `revision_notes` | list | yes | AI-generated revision suggestions. May be empty. |
 
-Design reason:
+Each `scenes` item:
 
-The screenplay draft stores the scene sequence and revision guidance. Detailed scene content (headings, beats, dialogue) is a future extension. The current structure supports review while keeping the format open for author edits.
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `id` | string | yes | Stable scene identifier matching the adaptation plan. |
+| `heading` | object | yes | Scene heading with location, time, and interior/exterior. |
+| `source_chapter_indexes` | list | yes | Source chapter indexes adapted into this scene. May be empty. |
+| `character_ids` | list | yes | Character IDs appearing in this scene. May be empty. |
+| `beats` | list | yes | Ordered actions, dialogue, and transitions. Must contain at least 1 beat. |
+
+Each `heading` object:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `location` | string | yes | Scene location. |
+| `time` | string | yes | Time of day or time cue. |
+| `interior_exterior` | string | yes | `INT`, `EXT`, or `INT/EXT`. |
+
+Each `beats` item:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `type` | string | yes | Beat type: `action`, `dialogue`, or `voiceover`. |
+| `text` | string | yes | Beat content (action description or dialogue line). |
+| `character_id` | string or null | yes | Character ID for dialogue and voiceover; null for action. |
+
+Design reasons:
+
+- **Stable scene IDs** allow cross-referencing scenes with the adaptation plan and review questions.
+- **Source chapter indexes** preserve traceability to the original novel, so authors can verify what was adapted.
+- **Structured headings** (location, time, interior_exterior) make scenes filterable and format-convertible to standard script formats.
+- **Ordered beats** represent the screenplay as an action-dialogue sequence, matching how scripts are written and produced.
+- **Dialogue character_id** references characters by ID, keeping character identity separate from spoken text and enabling voice assignment.
+- **Separating screenplay from revision_notes** lets authors review the creative draft and AI feedback independently.
 
 ### `revision_notes`
 
@@ -538,12 +566,7 @@ confirmed_analysis:
   uncertainties: []
 user_confirmations:
   accepted_character_ids: ["char_001", "char_002"]
-  rejected_character_ids: []
-  edited_conflicts: []
   required_plot_points: ["密信必须保留"]
-  style_preferences:
-    tone: "悬疑"
-    pacing: "紧凑"
   notes: "强化林照和沈微之间的不信任。"
   uncertainty_resolutions:
     - uncertainty_id: "uncertainty_001"
@@ -622,7 +645,49 @@ adaptation_plan:
       context: "共 3 个章节改编为场景。"
       related_scene_ids: ["scene_001", "scene_002", "scene_003"]
 screenplay:
-  scene_ids: ["scene_001", "scene_002", "scene_003"]
+  scenes:
+    - id: "scene_001"
+      heading:
+        location: "茶馆"
+        time: "夜"
+        interior_exterior: "INT"
+      source_chapter_indexes: [1]
+      character_ids: ["char_001"]
+      beats:
+        - type: "action"
+          text: "林照拆开父亲留下的密信。"
+          character_id: null
+        - type: "dialogue"
+          text: "这不是父亲的笔迹。"
+          character_id: "char_001"
+    - id: "scene_002"
+      heading:
+        location: "巷口"
+        time: "夜"
+        interior_exterior: "EXT"
+      source_chapter_indexes: [2]
+      character_ids: ["char_001", "char_002"]
+      beats:
+        - type: "action"
+          text: "沈微从暗处走出，拦住林照。"
+          character_id: null
+        - type: "dialogue"
+          text: "你不能公开这封信。"
+          character_id: "char_002"
+    - id: "scene_003"
+      heading:
+        location: "旧档案室"
+        time: "凌晨"
+        interior_exterior: "INT"
+      source_chapter_indexes: [3]
+      character_ids: ["char_001", "char_002"]
+      beats:
+        - type: "action"
+          text: "两人翻找旧档案，发现密信指向二十年前的悬案。"
+          character_id: null
+        - type: "dialogue"
+          text: "原来父亲一直在查这个案子。"
+          character_id: "char_001"
   revision_notes:
     - "场景 1 需要导演审查节奏。"
     - "场景 2 对话需要润色。"
@@ -659,5 +724,6 @@ Future implementations should validate:
 - `adaptation_plan` is based on `confirmed_analysis`, not raw `ai_analysis`.
 - `adaptation_plan.scenes` scene IDs and `scene_order` values are unique.
 - `adaptation_plan.scenes` reference existing confirmed character IDs and source chapter indexes.
-- `screenplay.scene_ids` reference `adaptation_plan.scenes` IDs. May be empty if not yet generated.
+- `screenplay.scenes` IDs must exist in `adaptation_plan.scenes`. Scene count must match the plan. May be empty if not yet generated.
+- `screenplay.scenes` are ordered consistently with `adaptation_plan.scenes` (by `scene_order`).
 - `revision_notes` contains plain-text strings. May be empty.
