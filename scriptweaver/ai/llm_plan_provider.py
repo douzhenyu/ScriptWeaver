@@ -200,10 +200,10 @@ class LLMPlanProvider:
                     u.id: u for u in confirmed_analysis.uncertainties
                 }
                 # Build lookup: option_id → UncertaintyOption
-                opt_by_id: dict[str, tuple[str, str, str]] = {}
+                opt_by_id: dict[tuple[str, str], tuple[str, str, str]] = {}
                 for u in confirmed_analysis.uncertainties:
                     for opt in u.options:
-                        opt_by_id[opt.id] = (
+                        opt_by_id[(u.id, opt.id)] = (
                             opt.label, opt.description, opt.impact
                         )
 
@@ -217,7 +217,7 @@ class LLMPlanProvider:
                     parts.append(f"- {r.uncertainty_id}: \"{question}\"")
 
                     if r.selected_option_id:
-                        opt_info = opt_by_id.get(r.selected_option_id)
+                        opt_info = opt_by_id.get((r.uncertainty_id, r.selected_option_id))
                         if opt_info:
                             label, desc, impact = opt_info
                             parts.append(
