@@ -97,10 +97,41 @@ class OpenAICompatibleStructuredLLMClient:
 
         try:
             parsed = json.loads(content)
-        except json.JSONDecodeError as error:
-            raise StructuredLLMError(
-                "Structured LLM response content is not valid JSON"
-            ) from error
+        except json.JSONDecodeError:
+            # Retry once — ask the LLM to fix its JSON
+            retry_response = self._sdk_client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": combined_system_prompt},
+                    {"role": "user", "content": input_prompt},
+                    {"role": "assistant", "content": content},
+                    {"role": "user", "content": (
+                        "The JSON you returned has a syntax error. "
+                        "Please fix it and return the complete, "
+                        "valid JSON object only."
+                    )},
+                ],
+                response_format={"type": "json_object"},
+            )
+            retry_choices = getattr(retry_response, "choices", None)
+            if not retry_choices:
+                raise StructuredLLMError(
+                    "LLM JSON retry returned no choices"
+                )
+            retry_content = getattr(
+                retry_choices[0].message, "content", None
+            )
+            if not isinstance(retry_content, str) or not retry_content.strip():
+                raise StructuredLLMError(
+                    "LLM JSON retry returned empty content"
+                )
+            try:
+                parsed = json.loads(retry_content)
+            except json.JSONDecodeError as error:
+                raise StructuredLLMError(
+                    "Structured LLM response is not valid JSON "
+                    "even after retry"
+                ) from error
 
         if not isinstance(parsed, dict):
             raise StructuredLLMError(
