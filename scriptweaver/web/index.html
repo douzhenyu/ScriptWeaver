@@ -301,22 +301,59 @@ async function confirmAnalysis() {
   finally { setLoading(btn, false); }
 }
 
+let currentPlan = null;
+
 function renderPlan(plan) {
   if (!plan) return;
+  currentPlan = JSON.parse(JSON.stringify(plan)); // deep clone for editing
+  refreshPlanUI();
+}
+
+function refreshPlanUI() {
+  const plan = currentPlan;
+  if (!plan) return;
   let h='<p><span class="tag">'+plan.target_format+'</span> '+plan.structure+'</p>';
-  (plan.scenes||[]).forEach(s=>{
-    h+='<div class="scene-card"><strong>'+s.scene_order+'. '+s.title+'</strong> <span class="info">'+s.dramatic_purpose+'</span>';
-    h+='<div>角色：'+(s.character_ids||[]).map(c=>'<span class="tag">'+charName(c)+'</span>').join('')+'</div></div>';
+  (plan.scenes||[]).forEach((s,i)=>{
+    h+='<div class="scene-card">';
+    h+='<div class="row"><strong>#'+(i+1)+'</strong>';
+    h+='<span class="tag" style="cursor:pointer" onclick="editSceneTitle('+i+')" title="点击编辑标题">'+escapeHtml(s.title)+'</span>';
+    h+='<span class="info" style="cursor:pointer" onclick="editScenePurpose('+i+')" title="点击编辑目的">'+escapeHtml(s.dramatic_purpose||'')+'</span>';
+    if (i>0) h+='<button class="btn-outline btn-sm" onclick="moveScene('+i+',-1)">↑</button>';
+    if (i<plan.scenes.length-1) h+='<button class="btn-outline btn-sm" onclick="moveScene('+i+',1)">↓</button>';
+    h+='</div>';
+    h+='<div>角色：'+(s.character_ids||[]).map(c=>'<span class="tag">'+charName(c)+'</span>').join('')+'</div>';
+    h+='</div>';
   });
+  h+='<p class="info">点击标题或目的可编辑，↑↓ 调整场景顺序</p>';
   document.getElementById('plan-content').innerHTML=h;
+}
+
+function editSceneTitle(i) {
+  const s = currentPlan.scenes[i];
+  const val = prompt('场景标题：', s.title);
+  if (val && val.trim()) { s.title = val.trim(); s.scene_order = i+1; refreshPlanUI(); }
+}
+
+function editScenePurpose(i) {
+  const s = currentPlan.scenes[i];
+  const val = prompt('戏剧目的：', s.dramatic_purpose||'');
+  if (val !== null) { s.dramatic_purpose = val.trim(); refreshPlanUI(); }
+}
+
+function moveScene(i, dir) {
+  const scenes = currentPlan.scenes;
+  const j = i + dir;
+  if (j<0 || j>=scenes.length) return;
+  [scenes[i], scenes[j]] = [scenes[j], scenes[i]];
+  scenes.forEach((s, idx) => { s.scene_order = idx + 1; });
+  refreshPlanUI();
 }
 
 async function confirmPlan() {
   const btn = document.querySelector('#plan-result .btn-primary');
   setLoading(btn, true, '生成剧本中…');
   try {
-    const job = await api('GET','/jobs/'+jobId);
-    const plan = job.adaptation_plan;
+    const plan = currentPlan || (await api('GET','/jobs/'+jobId)).adaptation_plan;
     const scenes = (plan.scenes||[]).map(s=>({
       id:s.id,scene_order:s.scene_order,title:s.title,
       dramatic_purpose:s.dramatic_purpose,
