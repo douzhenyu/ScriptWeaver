@@ -63,7 +63,7 @@ def validate_plan(
         scene_orders.add(scene.scene_order)
 
         # ── Character references ──────────────────────────────
-        if character_ids:
+        if confirmed_analysis is not None:
             for cid in scene.character_ids:
                 if cid not in character_ids:
                     raise PlanValidationError(
@@ -79,7 +79,7 @@ def validate_plan(
                     )
 
         # ── Retained event references ─────────────────────────
-        if event_ids:
+        if confirmed_analysis is not None:
             for eid in scene.retained_event_ids:
                 if eid not in event_ids:
                     raise PlanValidationError(
@@ -87,7 +87,7 @@ def validate_plan(
                     )
 
         # ── Candidate scene references ────────────────────────
-        if candidate_scene_ids:
+        if confirmed_analysis is not None:
             for sid in scene.source_candidate_scene_ids:
                 if sid not in candidate_scene_ids:
                     raise PlanValidationError(
@@ -112,7 +112,7 @@ def validate_plan(
                         f"'{d.id}'"
                     )
                 decision_ids.add(d.id)
-                if event_ids:
+                if confirmed_analysis is not None:
                     for eid in d.source_event_ids:
                         if eid not in event_ids:
                             raise PlanValidationError(
@@ -127,12 +127,6 @@ def validate_plan(
                     f"Duplicate review question id: {rq.id}"
                 )
             all_review_question_ids.add(rq.id)
-            for rsid in rq.related_scene_ids:
-                if rsid not in scene_ids:
-                    raise PlanValidationError(
-                        f"review question {rq.id}: unknown scene "
-                        f"'{rsid}'"
-                    )
 
     # ── scene_order consecutive from 1 ────────────────────────
     if scene_orders:
@@ -143,15 +137,24 @@ def validate_plan(
                 f"consecutive, got: {sorted(scene_orders)}"
             )
 
-    # ── Plan-level review questions ────────────────────────────
+    # ── Validate all review question scene references ──────────
     for rq in plan.review_questions:
         if rq.id in all_review_question_ids:
             raise PlanValidationError(
                 f"Duplicate review question id: {rq.id}"
             )
         all_review_question_ids.add(rq.id)
+    for rq in plan.review_questions:
         for rsid in rq.related_scene_ids:
             if rsid not in scene_ids:
                 raise PlanValidationError(
                     f"review question {rq.id}: unknown scene '{rsid}'"
                 )
+    for scene in plan.scenes:
+        for rq in scene.review_questions:
+            for rsid in rq.related_scene_ids:
+                if rsid not in scene_ids:
+                    raise PlanValidationError(
+                        f"review question {rq.id}: unknown scene "
+                        f"'{rsid}'"
+                    )
