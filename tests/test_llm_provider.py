@@ -337,13 +337,32 @@ def test_llm_provider_rejects_non_list_category():
 
 
 def test_llm_provider_rejects_item_missing_required_field():
+    # KeyEvent requires 'summary' — missing it should raise an error
+    fake_client = FakeStructuredLLMClient({
+        "characters": [],
+        "relationships": [],
+        "key_events": [
+            {
+                "id": "evt_001",
+                # missing required 'summary' field
+            }
+        ],
+        "conflicts": [],
+        "themes": [],
+        "candidate_scenes": [],
+        "uncertainties": [],
+    })
+    provider = LLMAnalysisProvider(fake_client)
+
+    with pytest.raises(AIProviderError, match="Failed to parse key_events"):
+        provider.analyze_chapters(make_chapters())
+
+
+def test_llm_provider_character_defaults_for_missing_fields():
+    # Character missing role/description/goal/motivation gets empty defaults
     fake_client = FakeStructuredLLMClient({
         "characters": [
-            {
-                "id": "char_001",
-                "name": "林照",
-                # missing role, description, goal, motivation
-            }
+            {"id": "char_001", "name": "林照"}
         ],
         "relationships": [],
         "key_events": [],
@@ -353,9 +372,12 @@ def test_llm_provider_rejects_item_missing_required_field():
         "uncertainties": [],
     })
     provider = LLMAnalysisProvider(fake_client)
-
-    with pytest.raises(AIProviderError, match="Failed to parse characters"):
-        provider.analyze_chapters(make_chapters())
+    analysis = provider.analyze_chapters(make_chapters())
+    c = analysis.characters[0]
+    assert c.name == "林照"
+    assert c.role == ""
+    assert c.goal == ""
+    assert c.motivation == ""
 
 
 def test_llm_provider_ignores_extra_fields():
