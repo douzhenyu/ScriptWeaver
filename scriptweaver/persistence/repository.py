@@ -16,6 +16,7 @@ def _job_to_dict(job: AdaptationJob) -> dict[str, Any]:
 
 def _job_from_dict(data: dict[str, Any]) -> AdaptationJob:
     """Deserialize an AdaptationJob from a JSON-compatible dict."""
+    from scriptweaver.domain.models import Chapter
     from scriptweaver.domain.workflow import AdaptationState
 
     field_names = {f.name for f in fields(AdaptationJob)}
@@ -25,6 +26,12 @@ def _job_from_dict(data: dict[str, Any]) -> AdaptationJob:
     # Convert state from string back to enum
     if "state" in filtered and isinstance(filtered["state"], str):
         filtered["state"] = AdaptationState(filtered["state"])
+    # Convert chapter dicts back to Chapter objects
+    if "chapters" in filtered and isinstance(filtered["chapters"], list):
+        filtered["chapters"] = [
+            Chapter(**ch) if isinstance(ch, dict) else ch
+            for ch in filtered["chapters"]
+        ]
     return AdaptationJob(**filtered)
 
 
