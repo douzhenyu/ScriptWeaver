@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
-from openai import OpenAI, OpenAIError
+from openai import (
+    APIConnectionError,
+    APIError,
+    APITimeoutError,
+    InternalServerError,
+    OpenAI,
+    OpenAIError,
+    RateLimitError,
+)
 
 from scriptweaver.llm.client import StructuredLLMError
 
@@ -55,6 +64,33 @@ class OpenAICompatibleStructuredLLMClient:
                 "timeout_seconds must be greater than 0"
             )
 
+    # Retryable transient errors — not auth or bad-request
+    _RETRYABLE = (RateLimitError, APITimeoutError, APIConnectionError,
+                  InternalServerError)
+
+    def _call_api(self, system_prompt: str, input_prompt: str, attempt: int):
+        try:
+            return self._sdk_client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": input_prompt},
+                ],
+                response_format={"type": "json_object"},
+            )
+        except self._RETRYABLE as error:
+            if attempt < 3:
+                delay = 2 ** (attempt - 1)  # 1s, 2s, 4s
+                time.sleep(delay)
+                return None  # signal to retry
+            raise StructuredLLMError(
+                f"LLM request failed after {attempt} attempts: {error}"
+            ) from error
+        except OpenAIError as error:
+            raise StructuredLLMError(
+                f"LLM request failed: {error}"
+            ) from error
+
     def generate_json(
         self,
         system_prompt: str,
@@ -70,19 +106,16 @@ class OpenAICompatibleStructuredLLMClient:
             else JSON_OBJECT_INSTRUCTION
         )
 
-        try:
-            response = self._sdk_client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": combined_system_prompt},
-                    {"role": "user", "content": input_prompt},
-                ],
-                response_format={"type": "json_object"},
-            )
-        except OpenAIError as error:
+        response = None
+        for attempt in range(1, 4):  # up to 3 attempts
+            response = self._call_api(combined_system_prompt, input_prompt, attempt)
+            if response is not None:
+                break
+
+        if response is None:
             raise StructuredLLMError(
-                f"Structured LLM request failed: {error}"
-            ) from error
+                "LLM request failed after 3 attempts"
+            )
 
         choices = getattr(response, "choices", None)
         if not choices:

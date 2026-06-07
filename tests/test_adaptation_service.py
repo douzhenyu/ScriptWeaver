@@ -74,12 +74,14 @@ def test_attach_chapters_validates_and_advances_state():
     assert original_job.chapters == []
 
 
-def test_attach_chapters_rejects_chapters_uploaded_state():
+def test_attach_chapters_is_idempotent():
+    """Re-attaching chapters from the same state is allowed (idempotent retry)."""
     service = AdaptationService(MockAIAnalysisProvider())
     chaptered_job = service.attach_chapters(service.create_job("job-001"), make_chapters())
 
-    with pytest.raises(WorkflowTransitionError, match="Cannot transition"):
-        service.attach_chapters(chaptered_job, make_chapters())
+    # Should succeed — self-transition is idempotent
+    updated = service.attach_chapters(chaptered_job, make_chapters())
+    assert updated.state == AdaptationState.CHAPTERS_UPLOADED
 
 
 def test_attach_chapters_accepts_single_chapter():

@@ -32,6 +32,9 @@ def ensure_transition_allowed(
     current_state: AdaptationState,
     next_state: AdaptationState,
 ) -> None:
+    # Self-transitions are always allowed (idempotent retry)
+    if current_state == next_state:
+        return
     allowed_next_states = ALLOWED_TRANSITIONS[current_state]
     if next_state not in allowed_next_states:
         raise WorkflowTransitionError(

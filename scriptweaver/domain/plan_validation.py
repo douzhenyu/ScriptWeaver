@@ -7,12 +7,63 @@ class PlanValidationError(ValueError):
     """Raised when an adaptation plan fails validation."""
 
 
+def _dedup_rq_ids(plan: AdaptationPlan) -> AdaptationPlan:
+    """Auto-rename duplicate review question IDs.
+
+    LLMs sometimes generate duplicate IDs for review questions.
+    Silently de-duplicate by appending a suffix rather than failing.
+    """
+    from dataclasses import replace
+
+    seen: set[str] = set()
+    changed = False
+
+    def _unique(seen_set: set[str], rq):
+        nonlocal changed
+        if rq.id not in seen_set:
+            seen_set.add(rq.id)
+            return rq
+        # Generate unique ID
+        base = rq.id
+        counter = 2
+        while f"{base}_{counter}" in seen_set:
+            counter += 1
+        new_id = f"{base}_{counter}"
+        seen_set.add(new_id)
+        changed = True
+        return replace(rq, id=new_id)
+
+    # Deduplicate scene-level review questions
+    new_scenes = []
+    for scene in plan.scenes:
+        new_rqs = [_unique(seen, rq) for rq in scene.review_questions]
+        if any(r1.id != r2.id for r1, r2 in zip(scene.review_questions, new_rqs)):
+            changed = True
+        new_scenes.append(
+            replace(scene, review_questions=new_rqs)
+            if new_rqs != scene.review_questions
+            else scene
+        )
+
+    # Deduplicate plan-level review questions
+    new_plan_rqs = [_unique(seen, rq) for rq in plan.review_questions]
+    if any(r1.id != r2.id for r1, r2 in zip(plan.review_questions, new_plan_rqs)):
+        changed = True
+        plan = replace(plan, review_questions=new_plan_rqs)
+
+    if changed:
+        plan = replace(plan, scenes=new_scenes)
+    return plan
+
+
 def validate_plan(
     plan: AdaptationPlan,
     *,
     confirmed_analysis: AIAnalysis | None = None,
     chapter_indexes: set[int] | None = None,
 ) -> None:
+    # Auto-deduplicate review question IDs (LLM robustness)
+    plan = _dedup_rq_ids(plan)
     if not plan.target_format.strip():
         raise PlanValidationError("target_format must not be blank")
 
