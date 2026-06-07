@@ -3,7 +3,7 @@ from __future__ import annotations
 from scriptweaver.domain.models import AdaptationPlan, ScreenplayDraft
 
 VALID_INTERIOR_EXTERIOR = {"INT", "EXT", "INT/EXT"}
-VALID_BEAT_TYPES = {"action", "dialogue", "transition"}
+VALID_BEAT_TYPES = {"action", "dialogue", "voiceover"}
 
 
 class ScreenplayValidationError(ValueError):

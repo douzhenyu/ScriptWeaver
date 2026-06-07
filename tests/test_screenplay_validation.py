@@ -254,14 +254,14 @@ def test_rejects_non_dialogue_with_character_id():
         validate_screenplay(draft, make_valid_plan())
 
 
-# ── Beat type: transition accepted ──────────────────────────────────
+# ── Beat type: voiceover accepted ──────────────────────────────────
 
 
-def test_accepts_transition_beat_type():
+def test_accepts_voiceover_beat_type():
     draft = make_valid_draft()
     scenes = list(draft.scenes)
     beats = list(scenes[0].beats) + [
-        Beat(type="transition", text="淡出。")
+        Beat(type="voiceover", text="旁白淡出。")
     ]
     scenes[0] = replace(scenes[0], beats=beats)
     draft = replace(draft, scenes=scenes)
