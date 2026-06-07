@@ -267,7 +267,13 @@ class AdaptationService:
             job.state, AdaptationState.PLAN_CONFIRMED
         )
 
-        validate_plan(confirmed_plan)
+        validate_plan(
+            confirmed_plan,
+            confirmed_analysis=job.confirmed_analysis,
+            chapter_indexes={
+                chapter.index for chapter in job.chapters
+            },
+        )
 
         return replace(
             job,
