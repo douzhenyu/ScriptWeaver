@@ -20,6 +20,7 @@ from scriptweaver.domain.models import (
     Theme,
     Uncertainty,
     UncertaintyOption,
+    UserConfirmations,
 )
 
 
@@ -143,6 +144,7 @@ class MockPlanProvider:
         self,
         confirmed_analysis: AIAnalysis,
         chapters: list[Chapter],
+        user_confirmations: UserConfirmations | None = None,
     ) -> AdaptationPlan:
         chapter_indexes = [c.index for c in chapters]
         character_ids = [c.id for c in confirmed_analysis.characters]

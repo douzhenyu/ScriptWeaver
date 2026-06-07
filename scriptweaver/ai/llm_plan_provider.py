@@ -11,6 +11,7 @@ from scriptweaver.domain.models import (
     Chapter,
     PlanReviewQuestion,
     ScenePlan,
+    UserConfirmations,
 )
 from scriptweaver.domain.plan_validation import (
     PlanValidationError,
@@ -123,13 +124,16 @@ class LLMPlanProvider:
         self,
         confirmed_analysis: AIAnalysis,
         chapters: list[Chapter],
+        user_confirmations: UserConfirmations | None = None,
     ) -> AdaptationPlan:
         if not chapters:
             raise AIProviderInputError(
                 "At least 1 chapter is required for plan generation"
             )
 
-        user_prompt = self._build_user_prompt(confirmed_analysis, chapters)
+        user_prompt = self._build_user_prompt(
+            confirmed_analysis, chapters, user_confirmations
+        )
 
         try:
             raw = self._llm_client.generate_json(SYSTEM_PROMPT, user_prompt)
@@ -151,6 +155,7 @@ class LLMPlanProvider:
     def _build_user_prompt(
         confirmed_analysis: AIAnalysis,
         chapters: list[Chapter],
+        user_confirmations: UserConfirmations | None,
     ) -> str:
         parts: list[str] = ["## Confirmed Analysis"]
 
@@ -175,6 +180,64 @@ class LLMPlanProvider:
                 parts.append(
                     f"- {s.id}: {s.title} - {s.dramatic_purpose}"
                 )
+
+        # ── Author Confirmations ──────────────────────────────
+        if user_confirmations is not None:
+            parts.append("\n## Author Confirmations")
+
+            # Resolved uncertainties
+            resolutions = user_confirmations.uncertainty_resolutions
+            if resolutions:
+                parts.append("\n### Resolved Uncertainties")
+                # Build lookup: uncertainty_id → Uncertainty
+                u_by_id = {
+                    u.id: u for u in confirmed_analysis.uncertainties
+                }
+                # Build lookup: option_id → UncertaintyOption
+                opt_by_id: dict[str, tuple[str, str, str]] = {}
+                for u in confirmed_analysis.uncertainties:
+                    for opt in u.options:
+                        opt_by_id[opt.id] = (
+                            opt.label, opt.description, opt.impact
+                        )
+
+                for r in resolutions:
+                    uncertainty = u_by_id.get(r.uncertainty_id)
+                    question = (
+                        uncertainty.question
+                        if uncertainty
+                        else r.uncertainty_id
+                    )
+                    parts.append(f"- {r.uncertainty_id}: \"{question}\"")
+
+                    if r.selected_option_id:
+                        opt_info = opt_by_id.get(r.selected_option_id)
+                        if opt_info:
+                            label, desc, impact = opt_info
+                            parts.append(
+                                f"  Selected: {r.selected_option_id}"
+                                f" \"{label}\" — {desc}"
+                            )
+                            parts.append(f"  Impact: {impact}")
+                        else:
+                            parts.append(
+                                f"  Selected: {r.selected_option_id}"
+                            )
+                    elif r.custom_answer:
+                        parts.append(
+                            f"  Custom answer: {r.custom_answer}"
+                        )
+
+            # Required plot points
+            if user_confirmations.required_plot_points:
+                parts.append("\n### Required Plot Points")
+                for pt in user_confirmations.required_plot_points:
+                    parts.append(f"- {pt}")
+
+            # Author notes
+            if user_confirmations.notes:
+                parts.append("\n### Author Notes")
+                parts.append(user_confirmations.notes)
 
         parts.append("\n## Source Chapters")
         for chapter in chapters:
