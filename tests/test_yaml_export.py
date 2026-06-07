@@ -16,6 +16,7 @@ from scriptweaver.domain.models import (
     ScenePlan,
     ScreenplayDraft,
     ScreenplayScene,
+    UncertaintyResolution,
     UserConfirmations,
 )
 from scriptweaver.domain.workflow import AdaptationState
@@ -50,6 +51,13 @@ def make_full_job():
     job = service.create_job("job-001")
     job = service.attach_chapters(job, make_chapters())
     job = service.generate_analysis(job)
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
     job = service.confirm_analysis(job)
     job = service.generate_plan(job)
     job = service.confirm_plan(job, job.adaptation_plan)

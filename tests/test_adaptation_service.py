@@ -349,6 +349,13 @@ def test_generate_analysis_rejects_invalid_uncertainty():
 def test_confirm_analysis_validates_and_advances_state():
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_analysis_generated_job(service)
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
     raw_analysis = job.ai_analysis
 
     updated_job = service.confirm_analysis(job)
@@ -382,6 +389,13 @@ def test_confirm_analysis_accepts_empty_analysis():
 def test_confirm_analysis_rejects_invalid_analysis():
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_analysis_generated_job(service)
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
     # Corrupt ai_analysis with duplicate characters
     char = job.ai_analysis.characters[0]
     corrupted = replace(job.ai_analysis, characters=[char, char])
@@ -410,6 +424,13 @@ def test_confirm_analysis_rejects_wrong_state_before_analysis_validation():
 def test_confirm_analysis_deep_copies_submitted_snapshot():
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_analysis_generated_job(service)
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
 
     updated_job = service.confirm_analysis(job)
 
@@ -423,6 +444,13 @@ def test_confirm_analysis_derives_from_ai_analysis():
     """confirmed_analysis must be derived from ai_analysis, not passed in."""
     service = AdaptationService(MockAIAnalysisProvider())
     job = make_analysis_generated_job(service)
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
 
     updated_job = service.confirm_analysis(job)
 
@@ -446,6 +474,12 @@ def test_confirm_analysis_filters_by_accepted_characters():
         job,
         user_confirmations=UserConfirmations(
             accepted_character_ids=["char_001"],
+            uncertainty_resolutions=[
+                UncertaintyResolution(
+                    uncertainty_id="uncertainty_001",
+                    selected_option_id="option_001",
+                ),
+            ],
         ),
     )
 
@@ -492,6 +526,111 @@ def test_confirm_analysis_rejects_without_ai_analysis():
 
     with pytest.raises(AdaptationServiceError, match="No AI analysis"):
         service.confirm_analysis(job)
+
+
+# ── PR 37: Require all uncertainties resolved ───────────────────
+
+
+def test_confirm_analysis_fails_when_uncertainties_unresolved():
+    """When AI analysis has uncertainties but none are resolved, confirm must fail."""
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+
+    with pytest.raises(
+        AdaptationServiceError, match="Unresolved uncertainties"
+    ):
+        service.confirm_analysis(job)
+
+    assert job.state == AdaptationState.ANALYSIS_GENERATED
+    assert job.confirmed_analysis is None
+
+
+def test_confirm_analysis_fails_when_uncertainties_partially_resolved():
+    """When only some uncertainties are resolved, confirm must fail."""
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    # Add a second uncertainty
+    uncertainties = list(job.ai_analysis.uncertainties) + [
+        Uncertainty(
+            id="uncertainty_002",
+            question="第二个问题",
+            context="更多上下文。",
+            options=[
+                UncertaintyOption(
+                    id="opt_a", label="A", description="dA",
+                    impact="iA",
+                ),
+                UncertaintyOption(
+                    id="opt_b", label="B", description="dB",
+                    impact="iB",
+                ),
+            ],
+            allow_custom_answer=True,
+            source_chapter_indexes=[1, 2, 3],
+        )
+    ]
+    job = replace(
+        job,
+        ai_analysis=replace(
+            job.ai_analysis, uncertainties=uncertainties
+        ),
+    )
+    # Answer only the first uncertainty
+    job = replace(
+        job,
+        user_confirmations=UserConfirmations(
+            uncertainty_resolutions=[
+                UncertaintyResolution(
+                    uncertainty_id="uncertainty_001",
+                    selected_option_id="option_001",
+                ),
+            ],
+        ),
+    )
+
+    with pytest.raises(
+        AdaptationServiceError, match="Unresolved uncertainties"
+    ):
+        service.confirm_analysis(job)
+
+    assert job.state == AdaptationState.ANALYSIS_GENERATED
+    assert job.confirmed_analysis is None
+
+
+def test_confirm_analysis_succeeds_when_all_uncertainties_resolved():
+    """When all uncertainties are resolved, confirm must succeed."""
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    job = replace(
+        job,
+        user_confirmations=UserConfirmations(
+            uncertainty_resolutions=[
+                UncertaintyResolution(
+                    uncertainty_id="uncertainty_001",
+                    selected_option_id="option_001",
+                ),
+            ],
+        ),
+    )
+
+    updated_job = service.confirm_analysis(job)
+
+    assert updated_job.state == AdaptationState.ANALYSIS_CONFIRMED
+    assert updated_job.confirmed_analysis is not None
+
+
+def test_confirm_analysis_succeeds_when_no_uncertainties():
+    """When AI analysis has no uncertainties, confirm must succeed directly."""
+    service = AdaptationService(MockAIAnalysisProvider())
+    job = make_analysis_generated_job(service)
+    job = replace(
+        job, ai_analysis=replace(job.ai_analysis, uncertainties=[])
+    )
+
+    updated_job = service.confirm_analysis(job)
+
+    assert updated_job.state == AdaptationState.ANALYSIS_CONFIRMED
+    assert updated_job.confirmed_analysis is not None
 
 
 # ── get_next_unanswered_uncertainty ──────────────────────────────
@@ -827,6 +966,14 @@ def make_analysis_confirmed_job(service: AdaptationService):
     chapters = make_chapters()
     job = service.attach_chapters(job, chapters)
     job = service.generate_analysis(job)
+    # Answer all uncertainties before confirming
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
     return service.confirm_analysis(job)
 
 
@@ -983,6 +1130,13 @@ def make_plan_generated_job(service: AdaptationService):
     job = service.attach_chapters(job, make_chapters())
     job = service.generate_analysis(job)
     analysis = job.ai_analysis
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
     job = service.confirm_analysis(job)
     # Manually set a plan to simulate PLAN_GENERATED state
     plan = AdaptationPlan(
@@ -1024,6 +1178,13 @@ def make_plan_confirmed_job(service: AdaptationService):
     job = service.attach_chapters(job, make_chapters())
     job = service.generate_analysis(job)
     analysis = job.ai_analysis
+    job = service.submit_uncertainty_answer(
+        job,
+        UncertaintyResolution(
+            uncertainty_id="uncertainty_001",
+            selected_option_id="option_001",
+        ),
+    )
     job = service.confirm_analysis(job)
     plan = AdaptationPlan(
         target_format="short_drama",
