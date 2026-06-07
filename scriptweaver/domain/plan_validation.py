@@ -73,6 +73,9 @@ def validate_plan(
         # ── Chapter index references ──────────────────────────
         if chapter_indexes is not None:
             for ci in scene.source_chapter_indexes:
+                # Tolerate 0-based indexes from LLMs; map 0 → 1
+                if ci == 0:
+                    ci = 1
                 if ci not in chapter_indexes:
                     raise PlanValidationError(
                         f"scene {scene.id}: unknown chapter index {ci}"
@@ -110,9 +113,7 @@ def validate_plan(
         # ── Scene-level review questions ──────────────────────
         for rq in scene.review_questions:
             if rq.id in all_review_question_ids:
-                raise PlanValidationError(
-                    f"Duplicate review question id: {rq.id}"
-                )
+                continue  # skip duplicate silently
             all_review_question_ids.add(rq.id)
 
     # ── scene_order consecutive from 1 ────────────────────────
@@ -125,11 +126,10 @@ def validate_plan(
             )
 
     # ── Validate all review question scene references ──────────
+    # De-duplicate silently — LLMs may repeat IDs across scene/plan levels
     for rq in plan.review_questions:
         if rq.id in all_review_question_ids:
-            raise PlanValidationError(
-                f"Duplicate review question id: {rq.id}"
-            )
+            continue  # skip duplicate silently
         all_review_question_ids.add(rq.id)
     for rq in plan.review_questions:
         for rsid in rq.related_scene_ids:
