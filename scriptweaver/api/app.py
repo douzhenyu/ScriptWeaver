@@ -383,6 +383,8 @@ def create_app(
 
 # ── Default application instance ──────────────────────────────────
 
+import os as _os
+import sqlite3 as _sqlite3
 from pathlib import Path as _Path  # noqa: E402
 
 from scriptweaver.ai.mock_provider import (  # noqa: E402
@@ -390,11 +392,56 @@ from scriptweaver.ai.mock_provider import (  # noqa: E402
     MockPlanProvider,
     MockScreenplayProvider,
 )
+from scriptweaver.persistence.repository import (  # noqa: E402
+    SqliteJobRepository,
+)
 
 _web_dir = _Path(__file__).parent.parent / "web"
+
+# ── Persistence: SQLite by default ───────────────────────────
+_data_dir = _Path("data")
+_data_dir.mkdir(exist_ok=True)
+_repo = SqliteJobRepository(
+    _sqlite3.connect(
+        str(_data_dir / "scriptweaver.db"), check_same_thread=False
+    )
+)
+
+# ── AI providers: env-var → real LLM, otherwise mock ─────────
+_api_key = _os.getenv("SCRIPTWEAVER_API_KEY", "").strip()
+if _api_key:
+    from scriptweaver.ai.llm_provider import LLMAnalysisProvider  # noqa: E402
+    from scriptweaver.ai.llm_plan_provider import LLMPlanProvider  # noqa: E402
+    from scriptweaver.ai.llm_screenplay_provider import LLMScreenplayProvider  # noqa: E402
+    from scriptweaver.llm.openai_compatible import (  # noqa: E402
+        OpenAICompatibleStructuredLLMClient,
+    )
+
+    _base_url = _os.getenv(
+        "SCRIPTWEAVER_BASE_URL",
+        "https://api.deepseek.com",
+    ).strip()
+    _model = _os.getenv(
+        "SCRIPTWEAVER_MODEL", "deepseek-chat"
+    ).strip()
+
+    _client = OpenAICompatibleStructuredLLMClient(
+        api_key=_api_key,
+        base_url=_base_url,
+        model=_model,
+    )
+    _analysis = LLMAnalysisProvider(_client)
+    _plan = LLMPlanProvider(_client)
+    _screenplay = LLMScreenplayProvider(_client)
+else:
+    _analysis = MockAIAnalysisProvider()
+    _plan = MockPlanProvider()
+    _screenplay = MockScreenplayProvider()
+
 app = create_app(
-    MockAIAnalysisProvider(),
-    plan_provider=MockPlanProvider(),
-    screenplay_provider=MockScreenplayProvider(),
+    _analysis,
+    plan_provider=_plan,
+    screenplay_provider=_screenplay,
+    repository=_repo,
     static_dir=str(_web_dir) if _web_dir.is_dir() else None,
 )
