@@ -333,21 +333,86 @@ async function confirmPlan() {
   finally { setLoading(btn, false); }
 }
 
+let currentDraft = null;
+
 function renderScreenplay(draft) {
   if (!draft||!draft.scenes) return;
+  currentDraft = draft;
   let h='';
-  draft.scenes.forEach(s=>{
+  draft.scenes.forEach((s,si)=>{
     h+='<div class="scene-card"><h3>'+s.id+'</h3>';
     if (s.heading) h+='<div class="info">📍 '+s.heading.location+' · '+s.heading.time+' · '+s.heading.interior_exterior+'</div>';
-    (s.beats||[]).forEach(b=>{
+    (s.beats||[]).forEach((b,bi)=>{
       const cls = 'beat '+(b.type||'action');
       const char = b.character_id ? ' <span class="char-tag">'+charName(b.character_id)+'</span>' : '';
-      h+='<div class="'+cls+'">['+b.type+']'+char+'：'+b.text+'</div>';
+      h+='<div class="'+cls+'" style="cursor:pointer" title="点击编辑" data-scene="'+si+'" data-beat="'+bi+'">['+b.type+']'+char+'：<span class="beat-text">'+escapeHtml(b.text)+'</span></div>';
     });
-    h+='</div>';
+    h+='<button class="btn-outline btn-sm" style="margin-top:6px" onclick="addBeat('+si+')">+ 添加 Beat</button></div>';
   });
+  h+='<div id="beat-editor" class="card hidden" style="margin-top:12px"></div>';
+  h+='<div class="row" style="margin-top:12px"><button class="btn-success" onclick="saveScreenplay()">💾 保存修改</button></div>';
   document.getElementById('screenplay-content').innerHTML=h||'<p>剧本生成完成。</p>';
+  // Delegate click to beat editor
+  document.getElementById('screenplay-content').addEventListener('click', function(e){
+    const beatDiv = e.target.closest('[data-scene]');
+    if (beatDiv) editBeat(+beatDiv.dataset.scene, +beatDiv.dataset.beat);
+  });
   show('screenplay-result', 'export-section'); setStep(9);
+}
+
+function editBeat(si, bi) {
+  const b = currentDraft.scenes[si].beats[bi];
+  const types = ['action','dialogue','voiceover','transition'];
+  let h = '<h3>编辑 Beat — '+currentDraft.scenes[si].id+' ['+bi+']</h3>';
+  h += '<div class="row"><label>类型：<select id="edit-type">'+types.map(t=>'<option value="'+t+'"'+(b.type===t?' selected':'')+'>'+t+'</option>').join('')+'</select></label>';
+  h += '<label style="margin-left:8px">角色ID：<input id="edit-char" value="'+escapeHtml(b.character_id||'')+'" placeholder="对话/旁白必填" style="width:150px"></label></div>';
+  h += '<textarea id="edit-text" style="min-height:80px;margin-top:8px">'+escapeHtml(b.text)+'</textarea>';
+  h += '<div class="row" style="margin-top:8px"><button class="btn-primary" onclick="saveBeat('+si+','+bi+')">确认</button><button class="btn-outline" onclick="closeEditor()">取消</button><button class="btn-danger btn-sm" style="margin-left:auto" onclick="deleteBeat('+si+','+bi+')">删除</button></div>';
+  document.getElementById('beat-editor').innerHTML = h;
+  document.getElementById('beat-editor').classList.remove('hidden');
+  document.getElementById('beat-editor').scrollIntoView({behavior:'smooth'});
+}
+
+function saveBeat(si, bi) {
+  const type = document.getElementById('edit-type').value;
+  const text = document.getElementById('edit-text').value.trim();
+  const cid = document.getElementById('edit-char').value.trim() || null;
+  if (!text) return;
+  currentDraft.scenes[si].beats[bi] = {type, text, character_id: cid};
+  renderScreenplay(currentDraft);
+}
+
+function closeEditor() {
+  document.getElementById('beat-editor').classList.add('hidden');
+}
+
+function addBeat(si) {
+  currentDraft.scenes[si].beats.push({type:'action', text:'新 beat', character_id: null});
+  renderScreenplay(currentDraft);
+  editBeat(si, currentDraft.scenes[si].beats.length-1);
+}
+
+function deleteBeat(si, bi) {
+  currentDraft.scenes[si].beats.splice(bi, 1);
+  renderScreenplay(currentDraft);
+}
+
+async function saveScreenplay() {
+  const btn = document.querySelector('#screenplay-content .btn-success');
+  setLoading(btn, true, '保存中…');
+  try {
+    const scenes = currentDraft.scenes.map(s=>({
+      id: s.id,
+      beats: (s.beats||[]).map(b=>({
+        type: b.type||'action',
+        text: b.text||'',
+        character_id: b.character_id||null
+      }))
+    }));
+    await api('PATCH','/jobs/'+jobId+'/screenplay',{scenes});
+    closeEditor();
+  } catch(e) { showError(e.message); }
+  finally { setLoading(btn, false); }
 }
 
 async function exportYAML() {

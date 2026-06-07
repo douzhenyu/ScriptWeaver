@@ -132,6 +132,42 @@ class ConfirmPlanRequest(BaseModel):
             raise ValueError(str(error)) from error
 
 
+def _merge_screenplay_edits(
+    draft, scene_updates: list[dict[str, Any]]
+):
+    """Apply frontend edits to a ScreenplayDraft.
+
+    scene_updates is a list of {id, beats: [{type, text, character_id}]}.
+    Only scenes present in the update list are modified; others stay unchanged.
+    """
+    from dataclasses import replace
+
+    from scriptweaver.domain.models import Beat, ScreenplayScene
+
+    current_by_id = {s.id: s for s in draft.scenes}
+    updated_scenes = list(draft.scenes)
+
+    for su in scene_updates:
+        sid = su.get("id", "")
+        current = current_by_id.get(sid)
+        if current is None:
+            continue
+        new_beats = [
+            Beat(
+                type=b.get("type", "action"),
+                text=b.get("text", ""),
+                character_id=b.get("character_id"),
+            )
+            for b in su.get("beats", [])
+        ]
+        idx = next(
+            i for i, s in enumerate(updated_scenes) if s.id == sid
+        )
+        updated_scenes[idx] = replace(current, beats=new_beats)
+
+    return replace(draft, scenes=updated_scenes)
+
+
 # ── App factory ──────────────────────────────────────────────────
 
 
@@ -354,6 +390,25 @@ def create_app(
             job = service.generate_screenplay(job)
         except WorkflowTransitionError as error:
             _handle_error(409, str(error))
+        except AdaptationServiceError as error:
+            _handle_error(400, str(error))
+        _save_job(job)
+        return _job_to_response(job)
+
+    # ── Update screenplay (edit) ───────────────────────────────
+
+    @app.patch("/jobs/{job_id}/screenplay")
+    def update_screenplay(job_id: str, req: dict[str, Any]):
+        job = _get_job(job_id)
+        if job.screenplay_draft is None:
+            raise HTTPException(
+                status_code=400, detail="No screenplay to update"
+            )
+        try:
+            updated = _merge_screenplay_edits(
+                job.screenplay_draft, req.get("scenes", [])
+            )
+            job = service.update_screenplay(job, updated)
         except AdaptationServiceError as error:
             _handle_error(400, str(error))
         _save_job(job)

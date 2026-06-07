@@ -14,6 +14,7 @@ from scriptweaver.domain.models import (
     AdaptationJob,
     AdaptationPlan,
     Chapter,
+    ScreenplayDraft,
     Uncertainty,
     UncertaintyResolution,
     UserConfirmations,
@@ -305,4 +306,19 @@ class AdaptationService:
             job,
             state=AdaptationState.SCREENPLAY_GENERATED,
             screenplay_draft=deepcopy(draft),
+        )
+
+    def update_screenplay(
+        self,
+        job: AdaptationJob,
+        updated_draft: ScreenplayDraft,
+    ) -> AdaptationJob:
+        """Replace the screenplay draft with an edited version."""
+        if job.screenplay_draft is None:
+            raise AdaptationServiceError(
+                "No screenplay draft to update"
+            )
+        return replace(
+            job,
+            screenplay_draft=deepcopy(updated_draft),
         )
