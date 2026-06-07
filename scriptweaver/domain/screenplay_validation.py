@@ -3,7 +3,13 @@ from __future__ import annotations
 from scriptweaver.domain.models import AdaptationPlan, ScreenplayDraft
 
 VALID_INTERIOR_EXTERIOR = {"INT", "EXT", "INT/EXT"}
-VALID_BEAT_TYPES = {"action", "dialogue", "voiceover"}
+_IE_NORMALIZE: dict[str, str] = {
+    "interior": "INT", "inside": "INT", "内景": "INT", "内": "INT",
+    "exterior": "EXT", "outside": "EXT", "外景": "EXT", "外": "EXT",
+    "int/ext": "INT/EXT", "int / ext": "INT/EXT",
+    "内外景": "INT/EXT", "内外": "INT/EXT",
+}
+VALID_BEAT_TYPES = {"action", "dialogue", "voiceover", "transition"}
 
 
 class ScreenplayValidationError(ValueError):
@@ -78,7 +84,10 @@ def validate_screenplay(
             raise ScreenplayValidationError(
                 f"scene {s.id}: heading.time must not be blank"
             )
-        normalized_ie = heading.interior_exterior.strip().upper()
+        raw_ie = heading.interior_exterior.strip()
+        normalized_ie = _IE_NORMALIZE.get(
+            raw_ie.lower(), raw_ie.upper()
+        )
         if normalized_ie not in VALID_INTERIOR_EXTERIOR:
             raise ScreenplayValidationError(
                 f"scene {s.id}: interior_exterior must be one of "

@@ -272,6 +272,26 @@ def test_accepts_voiceover_beat_type():
 # ── revision_notes ──────────────────────────────────────────────────
 
 
+def test_accepts_chinese_interior_exterior():
+    """Chinese 内景/外景 must be accepted and normalized."""
+    draft = make_valid_draft()
+    scenes = list(draft.scenes)
+    heading = replace(scenes[0].heading, interior_exterior="外景")
+    scenes[0] = replace(scenes[0], heading=heading)
+    draft = replace(draft, scenes=scenes)
+    validate_screenplay(draft, make_valid_plan())
+
+
+def test_accepts_lowercase_interior_exterior():
+    """Lowercase 'exterior' must be accepted."""
+    draft = make_valid_draft()
+    scenes = list(draft.scenes)
+    heading = replace(scenes[0].heading, interior_exterior="exterior")
+    scenes[0] = replace(scenes[0], heading=heading)
+    draft = replace(draft, scenes=scenes)
+    validate_screenplay(draft, make_valid_plan())
+
+
 def test_rejects_blank_revision_note():
     draft = make_valid_draft()
     draft = replace(draft, revision_notes=["  "])
