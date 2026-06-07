@@ -357,7 +357,7 @@ Each `scenes` item:
 | `heading` | object | yes | Scene heading with location, time, and interior/exterior. |
 | `source_chapter_indexes` | list | yes | Source chapter indexes adapted into this scene. May be empty. |
 | `character_ids` | list | yes | Character IDs appearing in this scene. May be empty. |
-| `beats` | list | yes | Ordered actions, dialogue, and transitions. Must contain at least 1 beat. |
+| `beats` | list | yes | Ordered actions, dialogue, voiceover, and transitions. Must contain at least 4 beats. |
 
 Each `heading` object:
 
@@ -365,13 +365,13 @@ Each `heading` object:
 | --- | --- | --- | --- |
 | `location` | string | yes | Scene location. |
 | `time` | string | yes | Time of day or time cue. |
-| `interior_exterior` | string | yes | `INT`, `EXT`, or `INT/EXT`. |
+| `interior_exterior` | string | yes | `INT`, `EXT`, or `INT/EXT`. Chinese values (`内景`, `外景`, `内外景`) are normalised at validation. |
 
 Each `beats` item:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `type` | string | yes | Beat type: `action`, `dialogue`, or `voiceover`. |
+| `type` | string | yes | Beat type: `action`, `dialogue`, `voiceover`, or `transition`. |
 | `text` | string | yes | Beat content (action description or dialogue line). |
 | `character_id` | string or null | yes | Character ID for dialogue and voiceover; null for action. |
 
@@ -381,8 +381,10 @@ Design reasons:
 - **Source chapter indexes** preserve traceability to the original novel, so authors can verify what was adapted.
 - **Structured headings** (location, time, interior_exterior) make scenes filterable and format-convertible to standard script formats.
 - **Ordered beats** represent the screenplay as an action-dialogue sequence, matching how scripts are written and produced.
-- **Dialogue character_id** references characters by ID, keeping character identity separate from spoken text and enabling voice assignment.
+- **Dialogue and voiceover character_id** references characters by ID, keeping character identity separate from spoken text and enabling voice assignment. Both `dialogue` and `voiceover` beats require a non-null `character_id`; `action` and `transition` beats must have `null` character_id.
 - **Separating screenplay from revision_notes** lets authors review the creative draft and AI feedback independently.
+- **Minimum beat count** of 4 prevents thin or summary-level output. Each key moment and dialogue exchange should be expanded into concrete beats.
+- **Transition beats** allow scenes to bridge time or space changes within a single scene heading.
 
 ### `revision_notes`
 
@@ -655,11 +657,17 @@ screenplay:
       character_ids: ["char_001"]
       beats:
         - type: "action"
-          text: "林照拆开父亲留下的密信。"
+          text: "林照拆开父亲留下的密信，手指微微发抖。"
           character_id: null
         - type: "dialogue"
           text: "这不是父亲的笔迹。"
           character_id: "char_001"
+        - type: "voiceover"
+          text: "二十年前，他用这种纸给我写过信。"
+          character_id: "char_001"
+        - type: "action"
+          text: "林照将信纸举到灯下，辨认褪色的字迹。"
+          character_id: null
     - id: "scene_002"
       heading:
         location: "巷口"
@@ -669,10 +677,19 @@ screenplay:
       character_ids: ["char_001", "char_002"]
       beats:
         - type: "action"
-          text: "沈微从暗处走出，拦住林照。"
+          text: "沈微从暗处走出，一把拦住林照的去路。"
           character_id: null
         - type: "dialogue"
           text: "你不能公开这封信。"
+          character_id: "char_002"
+        - type: "dialogue"
+          text: "你知道这封信？为什么瞒着我？"
+          character_id: "char_001"
+        - type: "action"
+          text: "沈微沉默片刻，目光扫过巷口的监控摄像头。"
+          character_id: null
+        - type: "dialogue"
+          text: "先跟我走，这里不安全。"
           character_id: "char_002"
     - id: "scene_003"
       heading:
@@ -683,11 +700,20 @@ screenplay:
       character_ids: ["char_001", "char_002"]
       beats:
         - type: "action"
-          text: "两人翻找旧档案，发现密信指向二十年前的悬案。"
+          text: "两人翻找积灰的旧档案，手电筒光束扫过发黄的文件夹。"
           character_id: null
         - type: "dialogue"
           text: "原来父亲一直在查这个案子。"
           character_id: "char_001"
+        - type: "action"
+          text: "沈微抽出一份标有\"绝密\"的卷宗，手指停在日期一栏。"
+          character_id: null
+        - type: "dialogue"
+          text: "二十年前的悬案……当天值班记录被人撕掉了。"
+          character_id: "char_002"
+        - type: "transition"
+          text: "天光微亮，两人仍在档案室翻阅。"
+          character_id: null
   revision_notes:
     - "场景 1 需要导演审查节奏。"
     - "场景 2 对话需要润色。"
@@ -726,4 +752,9 @@ Future implementations should validate:
 - `adaptation_plan.scenes` reference existing confirmed character IDs and source chapter indexes.
 - `screenplay.scenes` IDs must exist in `adaptation_plan.scenes`. Scene count must match the plan. May be empty if not yet generated.
 - `screenplay.scenes` are ordered consistently with `adaptation_plan.scenes` (by `scene_order`).
+- Each `screenplay.scene` must contain at least 4 beats.
+- Beat type must be one of: `action`, `dialogue`, `voiceover`, `transition`.
+- `dialogue` and `voiceover` beats must have a non-null, non-blank `character_id`.
+- `action` and `transition` beats must have `null` `character_id`.
+- `heading.interior_exterior` accepts `INT`, `EXT`, `INT/EXT`, and normalises Chinese values (`内景`, `外景`, `内外景`) automatically.
 - `revision_notes` contains plain-text strings. May be empty.
