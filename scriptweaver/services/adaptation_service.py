@@ -19,6 +19,7 @@ from scriptweaver.domain.models import (
     UserConfirmations,
 )
 from scriptweaver.domain.plan_validation import validate_plan
+from scriptweaver.domain.screenplay_validation import validate_screenplay
 from scriptweaver.domain.uncertainty_validation import (
     validate_uncertainty_resolutions,
 )
@@ -300,6 +301,8 @@ class AdaptationService:
             job.adaptation_plan,
             list(job.chapters),
         )
+
+        validate_screenplay(draft, job.adaptation_plan)
 
         return replace(
             job,
