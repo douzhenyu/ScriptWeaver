@@ -80,7 +80,9 @@ class OpenAICompatibleStructuredLLMClient:
                 response_format={"type": "json_object"},
             )
         except OpenAIError as error:
-            raise StructuredLLMError("Structured LLM request failed") from error
+            raise StructuredLLMError(
+                f"Structured LLM request failed: {error}"
+            ) from error
 
         choices = getattr(response, "choices", None)
         if not choices:
