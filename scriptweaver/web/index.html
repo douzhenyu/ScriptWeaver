@@ -70,7 +70,8 @@ pre { background: #f1f3f5; padding: 12px; border-radius: var(--radius); overflow
 <main>
   <div id="create-job" class="card">
     <h2>1. 创建任务</h2>
-    <div class="row"><input id="job-id" placeholder="输入任务 ID，如 demo-001" value="demo-001"><button class="btn-primary" onclick="createJob()">创建</button></div>
+    <div class="row"><input id="job-id" placeholder="输入任务 ID，如 demo-001" value="demo-001"><button class="btn-primary" onclick="createJob()">创建</button><button class="btn-outline btn-sm" onclick="loadJobList()">刷新列表</button></div>
+    <div id="job-list" class="info" style="margin-top:8px"></div>
   </div>
 
   <div id="upload-chapters" class="card hidden">
@@ -144,15 +145,45 @@ function setStep(n) {
 }
 
 async function createJob() {
-  const btn = document.querySelector('#create-job button');
+  const btn = document.querySelector('#create-job .btn-primary');
   jobId = document.getElementById('job-id').value.trim();
   if (!jobId) return;
   setLoading(btn, true, '创建中…');
   try {
     await api('POST','/jobs',{job_id:jobId});
     show('upload-chapters'); setStep(2);
+    loadJobList();
   } catch(e) { showError(e.message); }
   finally { setLoading(btn, false); }
+}
+
+async function loadJobList() {
+  try {
+    const jobs = await api('GET','/jobs');
+    const el = document.getElementById('job-list');
+    if (!jobs||!jobs.length) { el.innerHTML='暂无任务'; return; }
+    el.innerHTML = jobs.map(j=>
+      '<span class="tag" style="cursor:pointer;margin:2px" onclick="resumeJob(\''+j.id+'\')" title="恢复任务">📋 '+j.id+'</span>'
+    ).join('') +
+    ' <button class="btn-danger btn-sm" onclick="deleteAllJobs()" style="margin-left:8px">清空全部</button>';
+  } catch(e) { /* silent */ }
+}
+
+async function resumeJob(id) {
+  jobId = id;
+  const job = await api('GET','/jobs/'+id);
+  if (job.chapters && job.chapters.length) show('upload-chapters');
+  if (job.ai_analysis) { renderAnalysis(job.ai_analysis); show('analysis-result'); setStep(3); }
+  if (job.adaptation_plan) { renderPlan(job.adaptation_plan); show('plan-result'); setStep(6); }
+  if (job.screenplay_draft) { renderScreenplay(job.screenplay_draft); }
+  document.getElementById('job-id').value = id;
+}
+
+async function deleteAllJobs() {
+  if (!confirm('确定清空全部任务？此操作不可恢复。')) return;
+  const jobs = await api('GET','/jobs');
+  for (const j of jobs||[]) await api('DELETE','/jobs/'+j.id);
+  loadJobList();
 }
 
 function handleFile(input) {

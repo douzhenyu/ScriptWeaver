@@ -199,6 +199,18 @@ def create_app(
     def get_job(job_id: str):
         return _job_to_response(_get_job(job_id))
 
+    # ── List / Delete jobs ───────────────────────────────────
+
+    @app.get("/jobs")
+    def list_jobs():
+        return repo.list_all()
+
+    @app.delete("/jobs/{job_id}")
+    def delete_job(job_id: str):
+        if not repo.delete(job_id):
+            raise HTTPException(status_code=404, detail="Job not found")
+        return {"deleted": job_id}
+
     # ── Attach chapters ──────────────────────────────────────
 
     @app.post("/jobs/{job_id}/chapters")
