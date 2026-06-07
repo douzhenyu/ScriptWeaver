@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScriptWeaver — 小说转剧本 AI</title>
+<style>
+:root {
+  --bg: #f8f9fa; --card: #fff; --border: #dee2e6; --text: #212529;
+  --muted: #6c757d; --primary: #0d6efd; --primary-hover: #0b5ed7;
+  --success: #198754; --danger: #dc3545; --warning: #ffc107;
+  --radius: 8px; --shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 18px; font-weight: 600; }
+.steps { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.steps span { padding: 4px 10px; border-radius: 12px; font-size: 12px; background: var(--bg); border: 1px solid var(--border); }
+.steps span.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.card h2 { font-size: 16px; margin-bottom: 12px; }
+.row { display: flex; gap: 8px; align-items: center; }
+input, textarea, select, button { font: inherit; border-radius: 6px; padding: 8px 12px; }
+input, textarea, select { border: 1px solid var(--border); width: 100%; }
+textarea { min-height: 120px; resize: vertical; font-family: monospace; }
+button { border: none; cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-outline { background: var(--card); border: 1px solid var(--border); }
+.btn-outline:hover { background: var(--bg); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; background: var(--bg); border: 1px solid var(--border); margin: 2px; }
+.tag.blue { background: #cfe2ff; border-color: #9ec5fe; }
+.tag.green { background: #d1e7dd; border-color: #a3cfbb; }
+.tag.yellow { background: #fff3cd; border-color: #ffe69c; }
+.scene-card { border-left: 3px solid var(--primary); padding-left: 12px; margin-bottom: 12px; }
+.beat { padding: 6px 10px; margin: 4px 0; border-radius: 4px; font-size: 13px; }
+.beat.action { background: #e9ecef; }
+.beat.dialogue { background: #cfe2ff; }
+.beat.voiceover { background: #f8d7da; }
+.char-tag { font-weight: 600; color: var(--primary); }
+.uncertainty-card { border: 1px solid var(--warning); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.option-btn { display: block; width: 100%; text-align: left; padding: 10px 14px; margin: 6px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--card); cursor: pointer; }
+.option-btn:hover { background: #e7f1ff; border-color: var(--primary); }
+.option-btn.selected { background: #cfe2ff; border-color: var(--primary); }
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.hidden { display: none !important; }
+.info { color: var(--muted); font-size: 13px; }
+pre { background: #f1f3f5; padding: 12px; border-radius: var(--radius); overflow-x: auto; font-size: 12px; max-height: 400px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📜 ScriptWeaver</h1>
+  <div class="steps">
+    <span data-step="1">1.创建</span><span data-step="2">2.上传</span>
+    <span data-step="3">3.分析</span><span data-step="4">4.问答</span>
+    <span data-step="5">5.确认</span><span data-step="6">6.计划</span>
+    <span data-step="7">7.确认计划</span><span data-step="8">8.剧本</span>
+    <span data-step="9">9.导出</span>
+  </div>
+</header>
+<main>
+  <div id="create-job" class="card">
+    <h2>1. 创建任务</h2>
+    <div class="row"><input id="job-id" placeholder="输入任务 ID，如 demo-001" value="demo-001"><button class="btn-primary" onclick="createJob()">创建</button></div>
+  </div>
+
+  <div id="upload-chapters" class="card hidden">
+    <h2>2. 上传小说章节</h2>
+    <p class="info">上传 .txt 文件或直接粘贴文本，自动按章节标题拆分。</p>
+    <textarea id="chapter-text" placeholder="第一章 密信&#10;林照收到父亲留下的密信。&#10;&#10;第二章 阻拦&#10;沈微阻止公开。"></textarea>
+    <div class="row" style="margin-top:8px"><input type="file" id="file-input" accept=".txt" onchange="handleFile(this)"><button class="btn-primary" onclick="uploadText()">上传文本</button></div>
+  </div>
+
+  <div id="analysis-result" class="card hidden">
+    <h2>3. AI 分析结果</h2>
+    <div id="analysis-content"></div>
+    <button class="btn-primary hidden" id="start-qa-btn" onclick="startQA()">开始逐题回答</button>
+  </div>
+
+  <div id="uncertainty-qa" class="card hidden">
+    <h2>4. 回答不确定项</h2>
+    <div id="qa-content"></div>
+    <button class="btn-primary hidden" id="confirm-analysis-btn" onclick="confirmAnalysis()">确认分析</button>
+  </div>
+
+  <div id="plan-result" class="card hidden">
+    <h2>5-6. 改编计划</h2>
+    <div id="plan-content"></div>
+    <div class="row" style="margin-top:12px"><button class="btn-primary" onclick="confirmPlan()">确认计划</button></div>
+  </div>
+
+  <div id="screenplay-result" class="card hidden">
+    <h2>8. 剧本</h2>
+    <div id="screenplay-content"></div>
+  </div>
+
+  <div id="export-section" class="card hidden">
+    <h2>9. 导出 YAML</h2>
+    <div id="yaml-preview"></div>
+    <div class="row" style="margin-top:8px"><input id="meta-title" placeholder="标题" value="未命名"><input id="meta-author" placeholder="作者"><button class="btn-success" onclick="exportYAML()">导出 YAML</button></div>
+  </div>
+</main>
+
+<script>
+const API_BASE = 'http://127.0.0.1:8000';
+let jobId = '';
+let uncertaintyIndex = 0;
+let uncertainties = [];
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body && !(body instanceof FormData)) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  else if (body instanceof FormData) { opts.body = body; }
+  const r = await fetch(API_BASE + path, opts);
+  if (!r.ok) { const e = await r.json().catch(()=>({detail:r.statusText})); throw new Error(e.detail||'Unknown'); }
+  const t = r.headers.get('content-type')||'';
+  if (t.includes('application/x-yaml')||t.includes('text/')) return r.text();
+  if (r.status===204||r.headers.get('content-length')==='0') return null;
+  return r.json();
+}
+
+function show(...ids) {
+  document.querySelectorAll('.card').forEach(c=>c.classList.add('hidden'));
+  ids.forEach(id=>document.getElementById(id).classList.remove('hidden'));
+}
+
+function setStep(n) {
+  document.querySelectorAll('.steps span').forEach((s,i)=>s.classList.toggle('active', i+1===n));
+}
+
+async function createJob() {
+  jobId = document.getElementById('job-id').value.trim();
+  if (!jobId) return alert('请输入任务 ID');
+  await api('POST','/jobs',{job_id:jobId});
+  show('upload-chapters'); setStep(2);
+}
+
+function handleFile(input) {
+  const f = input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = e=> document.getElementById('chapter-text').value = e.target.result;
+  r.readAsText(f);
+}
+
+async function uploadText() {
+  const text = document.getElementById('chapter-text').value.trim();
+  if (!text) return alert('请输入章节文本');
+  const blob = new Blob([text],{type:'text/plain'});
+  const fd = new FormData(); fd.append('file', blob, 'novel.txt');
+  await api('POST','/jobs/'+jobId+'/upload', fd);
+  await doAnalyze();
+}
+
+async function doAnalyze() {
+  await api('POST','/jobs/'+jobId+'/analyze');
+  const job = await api('GET','/jobs/'+jobId);
+  renderAnalysis(job.ai_analysis);
+  show('analysis-result'); setStep(3);
+  if (job.ai_analysis.uncertainties && job.ai_analysis.uncertainties.length>0) {
+    document.getElementById('start-qa-btn').classList.remove('hidden');
+  } else {
+    document.getElementById('start-qa-btn').classList.add('hidden');
+  }
+}
+
+function renderAnalysis(a) {
+  if (!a) return;
+  let h='';
+  if (a.characters&&a.characters.length) {
+    h+='<h3>👤 人物 ('+a.characters.length+')</h3>';
+    a.characters.forEach(c=>h+='<span class="tag blue">'+c.name+' ('+c.role+')</span> '));
+  }
+  if (a.key_events&&a.key_events.length) {
+    h+='<h3>📌 关键事件</h3>';
+    a.key_events.forEach(e=>h+='<div class="tag">'+e.summary+'</div>'));
+  }
+  if (a.conflicts&&a.conflicts.length) {
+    h+='<h3>⚡ 冲突</h3>';
+    a.conflicts.forEach(c=>h+='<div class="tag yellow">'+c.description.substring(0,60)+'…</div>'));
+  }
+  if (a.themes&&a.themes.length) {
+    h+='<h3>💡 主题</h3>';
+    a.themes.forEach(t=>h+='<div class="tag green">'+t.statement+'</div>'));
+  }
+  if (a.uncertainties&&a.uncertainties.length) {
+    h+='<h3>❓ 不确定项 ('+a.uncertainties.length+')</h3>';
+  }
+  document.getElementById('analysis-content').innerHTML=h||'<p>分析完成。</p>';
+}
+
+function startQA() { uncertaintyIndex=0; showQA(); show('uncertainty-qa'); setStep(4); }
+
+async function showQA() {
+  const r = await api('GET','/jobs/'+jobId+'/next-uncertainty');
+  if (!r) {
+    document.getElementById('qa-content').innerHTML='<p>✅ 所有问题已回答。</p>';
+    document.getElementById('confirm-analysis-btn').classList.remove('hidden');
+    return;
+  }
+  let h='<div class="uncertainty-card"><h3>'+r.question+'</h3><p class="info">'+r.context+'</p>';
+  if (r.options) {
+    r.options.forEach(o=>h+='<button class="option-btn" onclick="selectOption(\''+r.id+'\',\''+o.id+'\',this)">'+o.label+' — '+o.description+'<br><small class="info">影响：'+o.impact+'</small></button>');
+  }
+  if (r.allow_custom_answer) h+='<textarea id="custom-answer" placeholder="自定义回答…" style="margin-top:8px"></textarea><button class="btn-outline btn-sm" onclick="submitCustom(\''+r.id+'\')">提交自定义回答</button>';
+  h+='</div>';
+  document.getElementById('qa-content').innerHTML=h;
+  document.getElementById('confirm-analysis-btn').classList.add('hidden');
+}
+
+function selectOption(uid, oid, btn) {
+  document.querySelectorAll('.option-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  api('POST','/jobs/'+jobId+'/uncertainty-answer',{uncertainty_id:uid,selected_option_id:oid}).then(showQA);
+}
+
+async function submitCustom(uid) {
+  const v = document.getElementById('custom-answer').value.trim();
+  if (!v) return;
+  await api('POST','/jobs/'+jobId+'/uncertainty-answer',{uncertainty_id:uid,custom_answer:v});
+  showQA();
+}
+
+async function confirmAnalysis() {
+  await api('POST','/jobs/'+jobId+'/confirm-analysis');
+  await api('POST','/jobs/'+jobId+'/generate-plan');
+  const job = await api('GET','/jobs/'+jobId);
+  renderPlan(job.adaptation_plan);
+  show('plan-result'); setStep(6);
+}
+
+function renderPlan(plan) {
+  if (!plan) return;
+  let h='<p><span class="tag">'+plan.target_format+'</span> '+plan.structure+'</p>';
+  (plan.scenes||[]).forEach(s=>{
+    h+='<div class="scene-card"><strong>'+s.scene_order+'. '+s.title+'</strong> <span class="info">'+s.dramatic_purpose+'</span>';
+    h+='<div>角色：'+(s.character_ids||[]).map(c=>'<span class="tag">'+c+'</span>').join('')+'</div></div>';
+  });
+  document.getElementById('plan-content').innerHTML=h;
+}
+
+async function confirmPlan() {
+  const job = await api('GET','/jobs/'+jobId);
+  const plan = job.adaptation_plan;
+  const scenes = (plan.scenes||[]).map(s=>({
+    id:s.id,scene_order:s.scene_order,title:s.title,
+    dramatic_purpose:s.dramatic_purpose,
+    character_ids:s.character_ids||[],
+    source_chapter_indexes:s.source_chapter_indexes||[],
+  }));
+  await api('POST','/jobs/'+jobId+'/confirm-plan',{
+    target_format:plan.target_format,structure:plan.structure,scenes:scenes,review_questions:plan.review_questions||[],
+  });
+  await api('POST','/jobs/'+jobId+'/generate-screenplay');
+  const j = await api('GET','/jobs/'+jobId);
+  renderScreenplay(j.screenplay_draft);
+  show('screenplay-result'); setStep(8);
+}
+
+function renderScreenplay(draft) {
+  if (!draft||!draft.scenes) return;
+  let h='';
+  draft.scenes.forEach(s=>{
+    h+='<div class="scene-card"><h3>'+s.id+'</h3>';
+    if (s.heading) h+='<div class="info">📍 '+s.heading.location+' · '+s.heading.time+' · '+s.heading.interior_exterior+'</div>';
+    (s.beats||[]).forEach(b=>{
+      const cls = 'beat '+(b.type||'action');
+      const char = b.character_id ? ' <span class="char-tag">'+b.character_id+'</span>' : '';
+      h+='<div class="'+cls+'">['+b.type+']'+char+'：'+b.text+'</div>';
+    });
+    h+='</div>';
+  });
+  document.getElementById('screenplay-content').innerHTML=h||'<p>剧本生成完成。</p>';
+  show('export-section'); setStep(9);
+}
+
+async function exportYAML() {
+  const t = document.getElementById('meta-title').value;
+  const a = document.getElementById('meta-author').value;
+  const y = await api('GET','/jobs/'+jobId+'/export-yaml?title='+encodeURIComponent(t)+'&author='+encodeURIComponent(a)+'&target_format=short_drama&language=zh-CN');
+  document.getElementById('yaml-preview').innerHTML='<pre>'+escapeHtml(y)+'</pre><br><a class="btn-success" href="data:application/x-yaml;charset=utf-8,'+encodeURIComponent(y)+'" download="'+jobId+'.yaml">⬇ 下载 YAML</a>';
+  setStep(9);
+}
+
+function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
