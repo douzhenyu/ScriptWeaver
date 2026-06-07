@@ -22,7 +22,10 @@ from scriptweaver.domain.uncertainty_validation import (
     UncertaintyValidationError,
 )
 from scriptweaver.domain.workflow import WorkflowTransitionError
-from scriptweaver.export.yaml_exporter import export_job_to_yaml
+from scriptweaver.export.yaml_exporter import (
+    export_job_to_yaml,
+    export_screenplay_to_text,
+)
 from scriptweaver.persistence.repository import (
     InMemoryJobRepository,
     JobRepository,
@@ -451,6 +454,17 @@ def create_app(
         return Response(
             content=yaml_str,
             media_type="application/x-yaml",
+        )
+
+    # ── Export Text (human-readable) ──────────────────────────
+
+    @app.get("/jobs/{job_id}/export-text")
+    def export_text(job_id: str):
+        job = _get_job(job_id)
+        text = export_screenplay_to_text(job)
+        return Response(
+            content=text,
+            media_type="text/plain; charset=utf-8",
         )
 
     # ── Static files ──────────────────────────────────────────

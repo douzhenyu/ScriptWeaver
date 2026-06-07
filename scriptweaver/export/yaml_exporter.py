@@ -56,3 +56,53 @@ def export_job_to_yaml(
         default_flow_style=False,
         sort_keys=False,
     )
+
+
+def export_screenplay_to_text(job: AdaptationJob) -> str:
+    """Export screenplay as human-readable text format."""
+    draft = job.screenplay_draft
+    if draft is None or not draft.scenes:
+        return ""
+
+    lines: list[str] = []
+    # Build character name lookup from analysis
+    char_names: dict[str, str] = {}
+    analysis = job.confirmed_analysis or job.ai_analysis
+    if analysis:
+        for c in analysis.characters:
+            char_names[c.id] = c.name
+
+    for scene in draft.scenes:
+        h = scene.heading
+        loc = h.location if h else ""
+        t = h.time if h else ""
+        ie = h.interior_exterior if h else ""
+        lines.append(f"\n{'='*50}")
+        lines.append(f"场景: {loc} - {t} ({ie})")
+        lines.append(f"{'='*50}\n")
+
+        for beat in scene.beats:
+            btype = beat.type or "action"
+            if btype == "action":
+                lines.append(f"  {beat.text}")
+            elif btype == "dialogue":
+                name = char_names.get(
+                    beat.character_id or "", beat.character_id or "?"
+                )
+                lines.append(f"  {name}：{beat.text}")
+            elif btype == "voiceover":
+                name = char_names.get(
+                    beat.character_id or "", beat.character_id or "?"
+                )
+                lines.append(f"  [{name} 旁白]：{beat.text}")
+            else:
+                lines.append(f"  [{btype}] {beat.text}")
+            lines.append("")
+
+    if draft.revision_notes:
+        lines.append(f"\n{'='*50}")
+        lines.append("修订建议：")
+        for note in draft.revision_notes:
+            lines.append(f"  - {note}")
+
+    return "\n".join(lines)
