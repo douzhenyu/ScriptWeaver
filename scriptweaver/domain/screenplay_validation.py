@@ -3,7 +3,13 @@ from __future__ import annotations
 from scriptweaver.domain.models import AdaptationPlan, ScreenplayDraft
 
 VALID_INTERIOR_EXTERIOR = {"INT", "EXT", "INT/EXT"}
-VALID_BEAT_TYPES = {"action", "dialogue", "voiceover"}
+_IE_NORMALIZE: dict[str, str] = {
+    "interior": "INT", "inside": "INT", "内景": "INT", "内": "INT",
+    "exterior": "EXT", "outside": "EXT", "外景": "EXT", "外": "EXT",
+    "int/ext": "INT/EXT", "int / ext": "INT/EXT",
+    "内外景": "INT/EXT", "内外": "INT/EXT",
+}
+VALID_BEAT_TYPES = {"action", "dialogue", "voiceover", "transition"}
 
 
 class ScreenplayValidationError(ValueError):
@@ -78,7 +84,11 @@ def validate_screenplay(
             raise ScreenplayValidationError(
                 f"scene {s.id}: heading.time must not be blank"
             )
-        if heading.interior_exterior not in VALID_INTERIOR_EXTERIOR:
+        raw_ie = heading.interior_exterior.strip()
+        normalized_ie = _IE_NORMALIZE.get(
+            raw_ie.lower(), raw_ie.upper()
+        )
+        if normalized_ie not in VALID_INTERIOR_EXTERIOR:
             raise ScreenplayValidationError(
                 f"scene {s.id}: interior_exterior must be one of "
                 f"{sorted(VALID_INTERIOR_EXTERIOR)}, "
@@ -113,7 +123,8 @@ def validate_screenplay(
         for i, beat in enumerate(s.beats):
             label = f"scene {s.id} beat {i}"
 
-            if beat.type not in VALID_BEAT_TYPES:
+            normalized_type = beat.type.strip().lower()
+            if normalized_type not in VALID_BEAT_TYPES:
                 raise ScreenplayValidationError(
                     f"{label}: beat type must be one of "
                     f"{sorted(VALID_BEAT_TYPES)}, "
@@ -125,15 +136,16 @@ def validate_screenplay(
                     f"{label}: beat text must not be blank"
                 )
 
-            if beat.type == "dialogue":
+            if normalized_type in ("dialogue", "voiceover"):
                 if not beat.character_id or not beat.character_id.strip():
                     raise ScreenplayValidationError(
-                        f"{label}: dialogue beat requires character_id"
+                        f"{label}: {normalized_type} beat requires "
+                        f"character_id"
                     )
             else:
                 if beat.character_id is not None:
                     raise ScreenplayValidationError(
-                        f"{label}: {beat.type} beat must not have "
+                        f"{label}: {normalized_type} beat must not have "
                         f"character_id"
                     )
 

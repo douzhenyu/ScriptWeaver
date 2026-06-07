@@ -47,9 +47,11 @@ button { border: none; cursor: pointer; font-weight: 500; white-space: nowrap; }
 .option-btn { display: block; width: 100%; text-align: left; padding: 10px 14px; margin: 6px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--card); cursor: pointer; }
 .option-btn:hover { background: #e7f1ff; border-color: var(--primary); }
 .option-btn.selected { background: #cfe2ff; border-color: var(--primary); }
-.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .6s linear infinite; }
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .hidden { display: none !important; }
+button:disabled { opacity: .65; cursor: not-allowed; }
+button .spinner { border-top-color: currentColor; border-color: rgba(255,255,255,.3); border-top-color: #fff; }
 .info { color: var(--muted); font-size: 13px; }
 pre { background: #f1f3f5; padding: 12px; border-radius: var(--radius); overflow-x: auto; font-size: 12px; max-height: 400px; }
 </style>
@@ -136,10 +138,15 @@ function setStep(n) {
 }
 
 async function createJob() {
+  const btn = document.querySelector('#create-job button');
   jobId = document.getElementById('job-id').value.trim();
-  if (!jobId) return alert('请输入任务 ID');
-  await api('POST','/jobs',{job_id:jobId});
-  show('upload-chapters'); setStep(2);
+  if (!jobId) return;
+  setLoading(btn, true, '创建中…');
+  try {
+    await api('POST','/jobs',{job_id:jobId});
+    show('upload-chapters'); setStep(2);
+  } catch(e) { showError(e.message); }
+  finally { setLoading(btn, false); }
 }
 
 function handleFile(input) {
@@ -151,11 +158,16 @@ function handleFile(input) {
 
 async function uploadText() {
   const text = document.getElementById('chapter-text').value.trim();
-  if (!text) return alert('请输入章节文本');
-  const blob = new Blob([text],{type:'text/plain'});
-  const fd = new FormData(); fd.append('file', blob, 'novel.txt');
-  await api('POST','/jobs/'+jobId+'/upload', fd);
-  await doAnalyze();
+  if (!text) return;
+  const btn = document.querySelector('#upload-chapters .btn-primary');
+  setLoading(btn, true, '上传解析中…');
+  try {
+    const blob = new Blob([text],{type:'text/plain'});
+    const fd = new FormData(); fd.append('file', blob, 'novel.txt');
+    await api('POST','/jobs/'+jobId+'/upload', fd);
+    await doAnalyze();
+  } catch(e) { showError(e.message); }
+  finally { setLoading(btn, false); }
 }
 
 async function doAnalyze() {
@@ -175,19 +187,19 @@ function renderAnalysis(a) {
   let h='';
   if (a.characters&&a.characters.length) {
     h+='<h3>👤 人物 ('+a.characters.length+')</h3>';
-    a.characters.forEach(c=>h+='<span class="tag blue">'+c.name+' ('+c.role+')</span> '));
+    a.characters.forEach(c=>h+='<span class="tag blue">'+c.name+' ('+c.role+')</span> ');
   }
   if (a.key_events&&a.key_events.length) {
     h+='<h3>📌 关键事件</h3>';
-    a.key_events.forEach(e=>h+='<div class="tag">'+e.summary+'</div>'));
+    a.key_events.forEach(e=>h+='<div class="tag">'+e.summary+'</div>');
   }
   if (a.conflicts&&a.conflicts.length) {
     h+='<h3>⚡ 冲突</h3>';
-    a.conflicts.forEach(c=>h+='<div class="tag yellow">'+c.description.substring(0,60)+'…</div>'));
+    a.conflicts.forEach(c=>h+='<div class="tag yellow">'+c.description.substring(0,60)+'…</div>');
   }
   if (a.themes&&a.themes.length) {
     h+='<h3>💡 主题</h3>';
-    a.themes.forEach(t=>h+='<div class="tag green">'+t.statement+'</div>'));
+    a.themes.forEach(t=>h+='<div class="tag green">'+t.statement+'</div>');
   }
   if (a.uncertainties&&a.uncertainties.length) {
     h+='<h3>❓ 不确定项 ('+a.uncertainties.length+')</h3>';
@@ -214,25 +226,40 @@ async function showQA() {
   document.getElementById('confirm-analysis-btn').classList.add('hidden');
 }
 
-function selectOption(uid, oid, btn) {
+async function selectOption(uid, oid, btn) {
   document.querySelectorAll('.option-btn').forEach(b=>b.classList.remove('selected'));
   btn.classList.add('selected');
-  api('POST','/jobs/'+jobId+'/uncertainty-answer',{uncertainty_id:uid,selected_option_id:oid}).then(showQA);
+  setLoading(btn, true, '提交中…');
+  try {
+    await api('POST','/jobs/'+jobId+'/uncertainty-answer',{uncertainty_id:uid,selected_option_id:oid});
+    await showQA();
+  } catch(e) { showError(e.message); }
+  finally { setLoading(btn, false); }
 }
 
 async function submitCustom(uid) {
   const v = document.getElementById('custom-answer').value.trim();
   if (!v) return;
-  await api('POST','/jobs/'+jobId+'/uncertainty-answer',{uncertainty_id:uid,custom_answer:v});
-  showQA();
+  const btn = document.querySelector('#qa-content .btn-outline');
+  setLoading(btn, true, '提交中…');
+  try {
+    await api('POST','/jobs/'+jobId+'/uncertainty-answer',{uncertainty_id:uid,custom_answer:v});
+    await showQA();
+  } catch(e) { showError(e.message); }
+  finally { setLoading(btn, false); }
 }
 
 async function confirmAnalysis() {
-  await api('POST','/jobs/'+jobId+'/confirm-analysis');
-  await api('POST','/jobs/'+jobId+'/generate-plan');
-  const job = await api('GET','/jobs/'+jobId);
-  renderPlan(job.adaptation_plan);
-  show('plan-result'); setStep(6);
+  const btn = document.getElementById('confirm-analysis-btn');
+  setLoading(btn, true, '生成计划中…');
+  try {
+    await api('POST','/jobs/'+jobId+'/confirm-analysis');
+    await api('POST','/jobs/'+jobId+'/generate-plan');
+    const job = await api('GET','/jobs/'+jobId);
+    renderPlan(job.adaptation_plan);
+    show('plan-result'); setStep(6);
+  } catch(e) { showError(e.message); }
+  finally { setLoading(btn, false); }
 }
 
 function renderPlan(plan) {
@@ -246,21 +273,25 @@ function renderPlan(plan) {
 }
 
 async function confirmPlan() {
-  const job = await api('GET','/jobs/'+jobId);
-  const plan = job.adaptation_plan;
-  const scenes = (plan.scenes||[]).map(s=>({
-    id:s.id,scene_order:s.scene_order,title:s.title,
-    dramatic_purpose:s.dramatic_purpose,
-    character_ids:s.character_ids||[],
-    source_chapter_indexes:s.source_chapter_indexes||[],
-  }));
-  await api('POST','/jobs/'+jobId+'/confirm-plan',{
-    target_format:plan.target_format,structure:plan.structure,scenes:scenes,review_questions:plan.review_questions||[],
-  });
-  await api('POST','/jobs/'+jobId+'/generate-screenplay');
-  const j = await api('GET','/jobs/'+jobId);
-  renderScreenplay(j.screenplay_draft);
-  show('screenplay-result'); setStep(8);
+  const btn = document.querySelector('#plan-result .btn-primary');
+  setLoading(btn, true, '生成剧本中…');
+  try {
+    const job = await api('GET','/jobs/'+jobId);
+    const plan = job.adaptation_plan;
+    const scenes = (plan.scenes||[]).map(s=>({
+      id:s.id,scene_order:s.scene_order,title:s.title,
+      dramatic_purpose:s.dramatic_purpose,
+      character_ids:s.character_ids||[],
+      source_chapter_indexes:s.source_chapter_indexes||[],
+    }));
+    await api('POST','/jobs/'+jobId+'/confirm-plan',{
+      target_format:plan.target_format,structure:plan.structure,scenes:scenes,review_questions:plan.review_questions||[],
+    });
+    await api('POST','/jobs/'+jobId+'/generate-screenplay');
+    const j = await api('GET','/jobs/'+jobId);
+    renderScreenplay(j.screenplay_draft);
+  } catch(e) { showError(e.message); }
+  finally { setLoading(btn, false); }
 }
 
 function renderScreenplay(draft) {
@@ -277,18 +308,50 @@ function renderScreenplay(draft) {
     h+='</div>';
   });
   document.getElementById('screenplay-content').innerHTML=h||'<p>剧本生成完成。</p>';
-  show('export-section'); setStep(9);
+  show('screenplay-result', 'export-section'); setStep(9);
 }
 
 async function exportYAML() {
-  const t = document.getElementById('meta-title').value;
-  const a = document.getElementById('meta-author').value;
-  const y = await api('GET','/jobs/'+jobId+'/export-yaml?title='+encodeURIComponent(t)+'&author='+encodeURIComponent(a)+'&target_format=short_drama&language=zh-CN');
-  document.getElementById('yaml-preview').innerHTML='<pre>'+escapeHtml(y)+'</pre><br><a class="btn-success" href="data:application/x-yaml;charset=utf-8,'+encodeURIComponent(y)+'" download="'+jobId+'.yaml">⬇ 下载 YAML</a>';
-  setStep(9);
+  const btn = document.querySelector('#export-section .btn-success');
+  setLoading(btn, true, '导出中…');
+  try {
+    const t = document.getElementById('meta-title').value;
+    const a = document.getElementById('meta-author').value;
+    const y = await api('GET','/jobs/'+jobId+'/export-yaml?title='+encodeURIComponent(t)+'&author='+encodeURIComponent(a)+'&target_format=short_drama&language=zh-CN');
+    document.getElementById('yaml-preview').innerHTML='<pre>'+escapeHtml(y)+'</pre><br><a class="btn-success" href="data:application/x-yaml;charset=utf-8,'+encodeURIComponent(y)+'" download="'+jobId+'.yaml">⬇ 下载 YAML</a>';
+    setStep(9);
+  } catch(e) { showError(e.message); }
+  finally { setLoading(btn, false); }
 }
 
 function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Loading state helper — saves/restores button text, shows spinner, disables
+function setLoading(btn, loading, text) {
+  if (loading) {
+    btn._origText = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>' + (text || '处理中…');
+  } else {
+    btn.disabled = false;
+    btn.textContent = btn._origText || btn.textContent;
+  }
+}
+
+// Show inline error in a card, auto-dismiss after 6s
+function showError(msg) {
+  let el = document.getElementById('error-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'error-banner';
+    el.style.cssText = 'background:#f8d7da;border:1px solid #f5c2c7;color:#842029;padding:10px 16px;border-radius:8px;margin-bottom:16px;display:none;';
+    document.querySelector('main').prepend(el);
+  }
+  el.textContent = '❌ ' + msg;
+  el.style.display = 'block';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.style.display = 'none', 6000);
+}
 </script>
 </body>
 </html>
