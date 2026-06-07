@@ -25,6 +25,10 @@ from scriptweaver.domain.plan_validation import (
     PlanValidationError,
     validate_plan,
 )
+from scriptweaver.domain.screenplay_validation import (
+    ScreenplayValidationError,
+    validate_screenplay,
+)
 from scriptweaver.domain.uncertainty_validation import (
     UncertaintyValidationError,
     validate_uncertainties,
@@ -52,6 +56,7 @@ __all__ = [
     "ScenePlan",
     "ScreenplayDraft",
     "ScreenplayScene",
+    "ScreenplayValidationError",
     "UncertaintyOption",
     "UncertaintyResolution",
     "UncertaintyValidationError",
@@ -60,6 +65,7 @@ __all__ = [
     "ensure_transition_allowed",
     "validate_analysis",
     "validate_plan",
+    "validate_screenplay",
     "validate_uncertainties",
     "validate_uncertainty_resolutions",
 ]

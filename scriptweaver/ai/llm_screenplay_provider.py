@@ -12,6 +12,10 @@ from scriptweaver.domain.models import (
     ScreenplayDraft,
     ScreenplayScene,
 )
+from scriptweaver.domain.screenplay_validation import (
+    ScreenplayValidationError,
+    validate_screenplay,
+)
 from scriptweaver.llm.client import StructuredLLMClient, StructuredLLMError
 
 
@@ -111,7 +115,12 @@ class LLMScreenplayProvider:
                 f"LLM screenplay generation failed: {error}"
             ) from error
 
-        return self._parse_response(raw)
+        draft = self._parse_response(raw)
+        try:
+            validate_screenplay(draft, confirmed_plan)
+        except ScreenplayValidationError as error:
+            raise AIProviderError(str(error)) from error
+        return draft
 
     @staticmethod
     def _build_user_prompt(
