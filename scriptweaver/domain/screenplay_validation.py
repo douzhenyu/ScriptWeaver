@@ -128,15 +128,16 @@ def validate_screenplay(
                     f"{label}: beat text must not be blank"
                 )
 
-            if beat.type == "dialogue":
+            if normalized_type in ("dialogue", "voiceover"):
                 if not beat.character_id or not beat.character_id.strip():
                     raise ScreenplayValidationError(
-                        f"{label}: dialogue beat requires character_id"
+                        f"{label}: {normalized_type} beat requires "
+                        f"character_id"
                     )
             else:
                 if beat.character_id is not None:
                     raise ScreenplayValidationError(
-                        f"{label}: {beat.type} beat must not have "
+                        f"{label}: {normalized_type} beat must not have "
                         f"character_id"
                     )
 

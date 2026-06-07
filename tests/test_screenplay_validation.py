@@ -261,7 +261,7 @@ def test_accepts_voiceover_beat_type():
     draft = make_valid_draft()
     scenes = list(draft.scenes)
     beats = list(scenes[0].beats) + [
-        Beat(type="voiceover", text="旁白淡出。")
+        Beat(type="voiceover", text="旁白淡出。", character_id="char_001")
     ]
     scenes[0] = replace(scenes[0], beats=beats)
     draft = replace(draft, scenes=scenes)
