@@ -84,18 +84,48 @@ created → chapters_uploaded → analysis_generated → analysis_confirmed
          → plan_generated → plan_confirmed → screenplay_generated
 ```
 
+## Persistence
+
+Jobs are stored in a local SQLite database at `data/scriptweaver.db`. Data survives restarts automatically.
+
 ## AI Providers
 
-The default app uses Mock providers for development. For production, inject LLM-backed providers:
+**Without configuration**, the app uses Mock providers — fast for development, but produces placeholder content.
+
+**Set `SCRIPTWEAVER_API_KEY`** to switch to a real LLM:
+
+```bash
+# DeepSeek (default when API key is set)
+export SCRIPTWEAVER_API_KEY="sk-..."
+uvicorn scriptweaver.api.app:app --host 127.0.0.1 --port 8000
+
+# Custom model / base URL (e.g., Qwen, OpenAI-compatible)
+export SCRIPTWEAVER_API_KEY="sk-..."
+export SCRIPTWEAVER_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+export SCRIPTWEAVER_MODEL="qwen-plus"
+uvicorn scriptweaver.api.app:app --host 127.0.0.1 --port 8000
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `SCRIPTWEAVER_API_KEY` | (空) | 设置后启用真实 LLM，不设则用 Mock |
+| `SCRIPTWEAVER_BASE_URL` | `https://api.deepseek.com` | OpenAI 兼容 API 地址 |
+| `SCRIPTWEAVER_MODEL` | `deepseek-chat` | 模型名称 |
+
+For programmatic configuration, inject LLM-backed providers:
 
 ```python
 from scriptweaver.ai.llm_provider import LLMAnalysisProvider
 from scriptweaver.ai.llm_plan_provider import LLMPlanProvider
 from scriptweaver.ai.llm_screenplay_provider import LLMScreenplayProvider
-from scriptweaver.llm.qwen import QwenStructuredLLMClient
+from scriptweaver.llm.openai_compatible import OpenAICompatibleStructuredLLMClient
 from scriptweaver.api.app import create_app
 
-client = QwenStructuredLLMClient(api_key="...")
+client = OpenAICompatibleStructuredLLMClient(
+    api_key="sk-...",
+    base_url="https://api.deepseek.com",
+    model="deepseek-chat",
+)
 app = create_app(
     ai_provider=LLMAnalysisProvider(client),
     plan_provider=LLMPlanProvider(client),
