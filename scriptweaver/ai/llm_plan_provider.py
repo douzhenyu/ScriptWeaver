@@ -146,7 +146,13 @@ class LLMPlanProvider:
 
         plan = self._parse_response(raw)
         try:
-            validate_plan(plan)
+            validate_plan(
+                plan,
+                confirmed_analysis=confirmed_analysis,
+                chapter_indexes={
+                    chapter.index for chapter in chapters
+                },
+            )
         except PlanValidationError as error:
             raise AIProviderError(str(error)) from error
         return plan
