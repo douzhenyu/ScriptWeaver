@@ -274,31 +274,21 @@ class AdaptationJob:
     screenplay_draft: ScreenplayDraft | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        def _d(obj):
+            if obj is None: return None
+            if isinstance(obj, dict): return obj
+            return obj.to_dict()
+
         return {
             "id": self.id,
             "state": self.state.value,
-            "chapters": [chapter.to_dict() for chapter in self.chapters],
-            "ai_analysis": (
-                self.ai_analysis.to_dict() if self.ai_analysis is not None else None
-            ),
-            "confirmed_analysis": (
-                self.confirmed_analysis.to_dict()
-                if self.confirmed_analysis is not None
-                else None
-            ),
-            "user_confirmations": (
-                self.user_confirmations.to_dict()
-                if self.user_confirmations is not None
-                else None
-            ),
-            "adaptation_plan": (
-                self.adaptation_plan.to_dict()
-                if self.adaptation_plan is not None
-                else None
-            ),
-            "screenplay_draft": (
-                self.screenplay_draft.to_dict()
-                if self.screenplay_draft is not None
-                else None
-            ),
+            "chapters": [
+                ch.to_dict() if not isinstance(ch, dict) else ch
+                for ch in self.chapters
+            ],
+            "ai_analysis": _d(self.ai_analysis),
+            "confirmed_analysis": _d(self.confirmed_analysis),
+            "user_confirmations": _d(self.user_confirmations),
+            "adaptation_plan": _d(self.adaptation_plan),
+            "screenplay_draft": _d(self.screenplay_draft),
         }
