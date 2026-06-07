@@ -105,9 +105,9 @@ pre { background: #f1f3f5; padding: 12px; border-radius: var(--radius); overflow
   </div>
 
   <div id="export-section" class="card hidden">
-    <h2>9. 导出 YAML</h2>
+    <h2>9. 导出</h2>
     <div id="yaml-preview"></div>
-    <div class="row" style="margin-top:8px"><input id="meta-title" placeholder="标题" value="未命名"><input id="meta-author" placeholder="作者"><button class="btn-success" onclick="exportYAML()">导出 YAML</button></div>
+    <div class="row" style="margin-top:8px"><input id="meta-title" placeholder="标题" value="未命名"><input id="meta-author" placeholder="作者"><button class="btn-success" onclick="exportYAML()">导出 YAML</button><button class="btn-outline" onclick="exportText()">导出文本</button></div>
   </div>
 </main>
 
@@ -488,6 +488,16 @@ async function exportYAML() {
 }
 
 function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function exportText() {
+  const btn = document.querySelector('#export-section .btn-outline');
+  setLoading(btn, true, '导出中…');
+  try {
+    const text = await api('GET','/jobs/'+jobId+'/export-text');
+    document.getElementById('yaml-preview').innerHTML='<pre>'+escapeHtml(text)+'</pre><br><a class="btn-primary" href="data:text/plain;charset=utf-8,'+encodeURIComponent(text)+'" download="'+jobId+'.txt">⬇ 下载文本</a>';
+  } catch(e) { showError(e.message); }
+  finally { setLoading(btn, false); }
+}
 
 // Loading state helper — saves/restores button text, shows spinner, disables
 function setLoading(btn, loading, text) {
