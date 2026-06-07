@@ -78,7 +78,8 @@ def validate_screenplay(
             raise ScreenplayValidationError(
                 f"scene {s.id}: heading.time must not be blank"
             )
-        if heading.interior_exterior not in VALID_INTERIOR_EXTERIOR:
+        normalized_ie = heading.interior_exterior.strip().upper()
+        if normalized_ie not in VALID_INTERIOR_EXTERIOR:
             raise ScreenplayValidationError(
                 f"scene {s.id}: interior_exterior must be one of "
                 f"{sorted(VALID_INTERIOR_EXTERIOR)}, "
@@ -105,7 +106,8 @@ def validate_screenplay(
         for i, beat in enumerate(s.beats):
             label = f"scene {s.id} beat {i}"
 
-            if beat.type not in VALID_BEAT_TYPES:
+            normalized_type = beat.type.strip().lower()
+            if normalized_type not in VALID_BEAT_TYPES:
                 raise ScreenplayValidationError(
                     f"{label}: beat type must be one of "
                     f"{sorted(VALID_BEAT_TYPES)}, "
