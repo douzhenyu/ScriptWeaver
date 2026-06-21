@@ -130,6 +130,25 @@ let jobId = '';
 let uncertaintyIndex = 0;
 let uncertainties = [];
 let charNames = {};  // character_id → name lookup
+let chapterTitles = {};
+let eventSummaries = {};
+
+function hydrateSourceLookups(job) {
+  chapterTitles = {};
+  eventSummaries = {};
+  (job.chapters||[]).forEach(ch=>{ chapterTitles[ch.index]=ch.title; });
+  const analysis = job.confirmed_analysis || job.ai_analysis || {};
+  (analysis.key_events||[]).forEach(e=>{ eventSummaries[e.id]=e.summary || '来源事件未命名'; });
+}
+
+function chapterLabel(index) {
+  const title = chapterTitles[index];
+  return title ? '第 '+index+' 章 · '+title : '第 '+index+' 章';
+}
+
+function eventSummary(id) {
+  return eventSummaries[id] || '来源事件未命名';
+}
 
 function charName(id) {
   if (!id) return '';
@@ -185,6 +204,7 @@ async function loadJobList() {
 async function resumeJob(id) {
   jobId = id;
   const job = await api('GET','/jobs/'+id);
+  hydrateSourceLookups(job);
   if (job.chapters && job.chapters.length) show('upload-chapters');
   if (job.ai_analysis) { renderAnalysis(job.ai_analysis); show('analysis-result'); setStep(3); }
   if (job.adaptation_plan) { renderPlan(job.adaptation_plan); show('plan-result'); setStep(6); }
@@ -230,6 +250,7 @@ async function uploadText() {
 async function doAnalyze() {
   await api('POST','/jobs/'+jobId+'/analyze');
   const job = await api('GET','/jobs/'+jobId);
+  hydrateSourceLookups(job);
   renderAnalysis(job.ai_analysis);
   show('analysis-result'); setStep(3);
   if (job.ai_analysis.uncertainties && job.ai_analysis.uncertainties.length>0) {
@@ -317,6 +338,7 @@ async function confirmAnalysis() {
     await api('POST','/jobs/'+jobId+'/confirm-analysis');
     await api('POST','/jobs/'+jobId+'/generate-plan');
     const job = await api('GET','/jobs/'+jobId);
+    hydrateSourceLookups(job);
     renderPlan(job.adaptation_plan);
     show('plan-result'); setStep(6);
   } catch(e) { showError(e.message); }
