@@ -436,6 +436,12 @@ async function confirmPlan() {
       dramatic_purpose:s.dramatic_purpose,
       character_ids:s.character_ids||[],
       source_chapter_indexes:s.source_chapter_indexes||[],
+      retained_event_ids:s.retained_event_ids||[],
+      source_candidate_scene_ids:s.source_candidate_scene_ids||[],
+      compression_choices:s.compression_choices||[],
+      merge_choices:s.merge_choices||[],
+      rewrite_choices:s.rewrite_choices||[],
+      review_questions:s.review_questions||[],
     }));
     await api('POST','/jobs/'+jobId+'/confirm-plan',{
       target_format:plan.target_format,structure:plan.structure,scenes:scenes,review_questions:plan.review_questions||[],
