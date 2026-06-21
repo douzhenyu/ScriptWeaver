@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-BASE="http://127.0.0.1:8137"
-JOB="demo-001"
+BASE="http://127.0.0.1:${SCRIPTWEAVER_PORT:-8000}"
+JOB="${SCRIPTWEAVER_DEMO_JOB:-demo-$(date +%s)}"
 BOLD="\033[1m"
 GREEN="\033[32m"
 RESET="\033[0m"
@@ -56,6 +56,8 @@ step "8. Generate screenplay & export YAML"
 curl -fsS -X POST "$BASE/jobs/$JOB/generate-screenplay" | python3 -m json.tool
 
 echo -e "\n${GREEN}${BOLD}=== YAML Export ===${RESET}"
-curl -fsS "$BASE/jobs/$JOB/export-yaml?title=密信&author=测试作者"
+curl -fsS -G "$BASE/jobs/$JOB/export-yaml" \
+  --data-urlencode "title=密信" \
+  --data-urlencode "author=测试作者"
 
 echo -e "\n\n${GREEN}${BOLD}Demo complete.${RESET}"

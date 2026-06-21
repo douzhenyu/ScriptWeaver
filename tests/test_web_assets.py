@@ -54,8 +54,8 @@ def test_index_html_has_api_config():
     html_path = Path(__file__).parent.parent / "scriptweaver" / "web" / "index.html"
     content = html_path.read_text()
 
-    # Must reference an API base URL configuration
-    assert "API_BASE" in content or "apiBase" in content or "127.0.0.1" in content
+    assert "const API_BASE = window.location.origin;" in content
+    assert "http://127.0.0.1:8000" not in content
 
 
 def test_plan_ui_builds_author_friendly_source_lookups():
