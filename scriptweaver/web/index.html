@@ -44,6 +44,14 @@ button { border: none; cursor: pointer; font-weight: 500; white-space: nowrap; }
 .tag.green { background: #d1e7dd; border-color: #a3cfbb; }
 .tag.yellow { background: #fff3cd; border-color: #ffe69c; }
 .scene-card { border-left: 3px solid var(--primary); padding-left: 12px; margin-bottom: 12px; }
+.scene-sources { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.decision-panel { border-top:1px solid var(--border); margin-top:12px; padding-top:12px; }
+.decision-title { font-weight:600; margin-bottom:8px; }
+.decision-item { border-left:3px solid var(--primary); padding:9px 11px; margin:7px 0; background:var(--bg); }
+.decision-item.compression { border-left-color:#d97706; }
+.decision-item.merge { border-left-color:#2563eb; }
+.decision-item.rewrite { border-left-color:#059669; }
+.decision-reason,.decision-source { color:var(--muted); font-size:13px; margin-top:4px; }
 .beat { padding: 6px 10px; margin: 4px 0; border-radius: 4px; font-size: 13px; }
 .beat.action { background: #e9ecef; }
 .beat.dialogue { background: #cfe2ff; }
@@ -353,6 +361,28 @@ function renderPlan(plan) {
   refreshPlanUI();
 }
 
+function renderSceneSources(scene) {
+  const indexes = scene.source_chapter_indexes||[];
+  if (!indexes.length) return '';
+  return '<div class="scene-sources">'+indexes.map(index=>'<span class="tag">'+escapeHtml(chapterLabel(index))+'</span>').join('')+'</div>';
+}
+
+function renderSceneDecisions(scene) {
+  const renderDecisionItem = (d,type,label) => {
+    let h='<div class="decision-item '+type+'"><strong>'+label+'</strong> '+escapeHtml(d.description||'');
+    if (d.reason) h+='<div class="decision-reason">原因：'+escapeHtml(d.reason||'')+'</div>';
+    const sources=(d.source_event_ids||[]).map(id=>escapeHtml(eventSummary(id)));
+    if (sources.length) h+='<div class="decision-source">来源：'+sources.join('、')+'</div>';
+    return h+'</div>';
+  };
+  const decisions = [];
+  (scene.compression_choices||[]).forEach(d=>decisions.push(renderDecisionItem(d,'compression','压缩')));
+  (scene.merge_choices||[]).forEach(d=>decisions.push(renderDecisionItem(d,'merge','合并')));
+  (scene.rewrite_choices||[]).forEach(d=>decisions.push(renderDecisionItem(d,'rewrite','改写')));
+  if (!decisions.length) return '';
+  return '<div class="decision-panel"><div class="decision-title">AI 改编决策 · '+decisions.length+' 项</div>'+decisions.join('')+'</div>';
+}
+
 function refreshPlanUI() {
   const plan = currentPlan;
   if (!plan) return;
@@ -365,6 +395,8 @@ function refreshPlanUI() {
     if (i>0) h+='<button class="btn-outline btn-sm" onclick="moveScene('+i+',-1)">↑</button>';
     if (i<plan.scenes.length-1) h+='<button class="btn-outline btn-sm" onclick="moveScene('+i+',1)">↓</button>';
     h+='</div>';
+    h+=renderSceneSources(s);
+    h+=renderSceneDecisions(s);
     h+='<div>角色：'+(s.character_ids||[]).map(c=>'<span class="tag">'+charName(c)+'</span>').join('')+'</div>';
     h+='</div>';
   });
