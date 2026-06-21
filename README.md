@@ -2,7 +2,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-330%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-339%20passed-brightgreen.svg)](tests/)
 
 **Human-in-the-loop AI 小说→剧本改编引擎**。将长篇小说的章节文本，通过多阶段 AI 分析与结构化改编规划，自动生成可编辑的分场剧本草稿。
 
@@ -59,7 +59,36 @@ curl http://127.0.0.1:8000/health
 
 打开 `http://127.0.0.1:8000` 进入 Web UI。
 
-### 3. Docker 部署
+### 3. Web 演示流程
+
+1. 输入任务 ID 并创建任务。
+2. 上传 `.txt` 小说文件，或直接粘贴章节文本。演示时建议使用三个或更多章节。
+3. 点击“上传文本”，系统会自动拆分章节并执行 AI 故事分析。
+4. 查看人物、关键事件、冲突和主题，逐项回答 AI 标记的不确定内容。
+5. 确认分析结果，查看并编辑 AI 生成的改编计划及压缩、合并、改写决策。
+6. 确认计划后生成分场剧本，编辑场景信息和 Beat，最后导出 YAML 或纯文本。
+
+可直接粘贴以下文本快速体验 Mock 模式：
+
+```text
+第一章 密信
+林照收到父亲留下的密信，决定调查一桩旧案。
+
+第二章 阻拦
+沈微担心真相伤害家人，阻止林照公开证据。
+
+第三章 对峙
+两人在档案馆对峙，最终决定共同寻找完整真相。
+```
+
+结果区域上方会按任务进度显示“AI 分析”“改编计划”“剧本”视图：
+
+- 只显示当前任务已经生成的结果，不会展示尚不可用的阶段。
+- 点击视图只切换已保存的内容，不会重新调用 AI 或改变工作流状态。
+- “剧本”视图同时显示 YAML 与文本导出功能。
+- 从任务列表恢复任务时，默认打开已经完成的最新阶段，也可以返回前序阶段查看分析依据和改编决策。
+
+### 4. Docker 部署
 
 ```bash
 # 构建并启动（Mock 模式）
@@ -320,6 +349,8 @@ sequenceDiagram
     API-->>UI: YAML / Text 文件下载
 ```
 
+生成分析、改编计划或剧本后，Web UI 会保留这些结果并提供任务视图切换。该切换完全在浏览器中完成，不会触发新的生成请求；重新载入页面后，可通过任务列表恢复任务并直接进入最新结果。
+
 ---
 
 ## API 接口
@@ -422,7 +453,7 @@ ScriptWeaver/
 │   │   └── progress.py              #   进度追踪 (ContextVar)
 │   └── web/
 │       └── index.html               # Web UI 单页应用 (~700 行)
-├── tests/                           # 测试 (330 条，全通过)
+├── tests/                           # 测试 (339 条，全通过)
 │   └── ...
 ├── docs/
 │   └── screenplay-yaml-schema.md    # YAML Schema 文档 (EN)
@@ -608,7 +639,7 @@ scene = replace(scene, id=plan_scene.id)
 
 ### 测试覆盖
 
-- **330 条测试，全部通过**
+- **339 条测试，全部通过**
 - 覆盖：领域模型、校验逻辑、API 端点、Mock Provider、LLM Provider
 - 重点测试边界：空值、重复 ID、缺失字段、非法引用、中文值归一化
 
