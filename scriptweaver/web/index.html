@@ -368,22 +368,18 @@ function renderSceneSources(scene) {
 }
 
 function renderDecisionItem(d,type,label) {
-  let h='<div class="decision-item '+type+'"><strong>'+label+'</strong> '+d.description;
-  if (d.reason) h+='<div class="decision-reason">原因：'+d.reason+'</div>';
-  if (d.sources.length) h+='<div class="decision-source">来源：'+d.sources.join('、')+'</div>';
+  let h='<div class="decision-item '+type+'"><strong>'+label+'</strong> '+escapeHtml(d.description||'');
+  if (d.reason) h+='<div class="decision-reason">原因：'+escapeHtml(d.reason||'')+'</div>';
+  const sources=(d.source_event_ids||[]).map(id=>escapeHtml(eventSummary(id)));
+  if (sources.length) h+='<div class="decision-source">来源：'+sources.join('、')+'</div>';
   return h+'</div>';
 }
 
 function renderSceneDecisions(scene) {
-  const render = (d,type,label) => renderDecisionItem({
-    description:escapeHtml(d.description||''),
-    reason:escapeHtml(d.reason||''),
-    sources:(d.source_event_ids||[]).map(id=>escapeHtml(eventSummary(id))),
-  },type,label);
   const decisions = [];
-  (scene.compression_choices||[]).forEach(d=>decisions.push(render(d,'compression','压缩')));
-  (scene.merge_choices||[]).forEach(d=>decisions.push(render(d,'merge','合并')));
-  (scene.rewrite_choices||[]).forEach(d=>decisions.push(render(d,'rewrite','改写')));
+  (scene.compression_choices||[]).forEach(d=>decisions.push(renderDecisionItem(d,'compression','压缩')));
+  (scene.merge_choices||[]).forEach(d=>decisions.push(renderDecisionItem(d,'merge','合并')));
+  (scene.rewrite_choices||[]).forEach(d=>decisions.push(renderDecisionItem(d,'rewrite','改写')));
   if (!decisions.length) return '';
   return '<div class="decision-panel"><div class="decision-title">AI 改编决策 · '+decisions.length+' 项</div>'+decisions.join('')+'</div>';
 }
