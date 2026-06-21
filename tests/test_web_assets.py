@@ -96,16 +96,16 @@ def test_plan_ui_renders_all_ai_decision_types():
 
 
 def test_plan_ui_escapes_ai_decision_content():
-    render_body = _function_body(_index_html(), "renderSceneDecisions")
+    render_body = _function_body(_index_html(), "renderDecisionItem")
     for field in ("description", "reason"):
         assert re.search(
             rf"escapeHtml\s*\(\s*d\s*\.\s*{field}\s*\|\|\s*(['\"])\1\s*\)",
             render_body,
-        ), f"renderSceneDecisions must escape decision {field} content"
+        ), f"renderDecisionItem must escape decision {field} content"
     assert re.search(
         r"escapeHtml\s*\(\s*eventSummary\s*\(\s*id\s*\)\s*\)",
         render_body,
-    ), "renderSceneDecisions must escape source event summaries"
+    ), "renderDecisionItem must escape source event summaries"
 
 
 def test_confirm_plan_preserves_ai_decision_fields():
