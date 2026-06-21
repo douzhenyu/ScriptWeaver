@@ -46,11 +46,11 @@ python3 -m pip install -e ".[dev]"
 
 ```bash
 # Mock 模式（无需 API Key，快速体验）
-uvicorn scriptweaver.api.app:app --host 127.0.0.1 --port 8000
+python run.py
 
 # 真实 LLM 模式（DeepSeek）
 export SCRIPTWEAVER_API_KEY="sk-你的密钥"
-uvicorn scriptweaver.api.app:app --host 127.0.0.1 --port 8000
+python run.py
 ```
 
 ```bash
@@ -87,6 +87,7 @@ docker compose up -d
 | `SCRIPTWEAVER_API_KEY` | (空) | LLM API 密钥。不设置则使用 Mock 模式 |
 | `SCRIPTWEAVER_BASE_URL` | `https://api.deepseek.com` | OpenAI 兼容 API 地址 |
 | `SCRIPTWEAVER_MODEL` | `deepseek-chat` | 模型名称 |
+| `SCRIPTWEAVER_PORT` | `8000` | 本地 Web 服务监听端口 |
 
 **支持的 LLM 服务：** DeepSeek、OpenAI、Qwen（通义千问），以及任何 OpenAI 兼容 API。
 
@@ -95,7 +96,7 @@ docker compose up -d
 export SCRIPTWEAVER_API_KEY="sk-..."
 export SCRIPTWEAVER_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
 export SCRIPTWEAVER_MODEL="qwen-plus"
-uvicorn scriptweaver.api.app:app --host 127.0.0.1 --port 8000
+python run.py
 ```
 
 ### 程序化注入

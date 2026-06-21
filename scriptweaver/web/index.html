@@ -125,7 +125,7 @@ pre { background: #f1f3f5; padding: 12px; border-radius: var(--radius); overflow
 (function(){const t=localStorage.getItem('sw-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();
 function toggleDark(){const el=document.documentElement;const is=el.getAttribute('data-theme')==='dark';if(is){el.removeAttribute('data-theme');localStorage.setItem('sw-theme','light');}else{el.setAttribute('data-theme','dark');localStorage.setItem('sw-theme','dark');}}
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = window.location.origin;
 let jobId = '';
 let uncertaintyIndex = 0;
 let uncertainties = [];

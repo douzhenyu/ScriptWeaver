@@ -72,9 +72,8 @@ def test_create_app_without_static_dir_still_works():
 
 
 def test_run_py_configures_mock_provider_by_default(monkeypatch):
-    """run.py must create an app instance with mock providers."""
-    monkeypatch.delenv("SW_LLM_PROVIDER", raising=False)
-    monkeypatch.delenv("SW_API_KEY", raising=False)
+    """run.py must reuse the configured module-level application."""
+    monkeypatch.delenv("SCRIPTWEAVER_API_KEY", raising=False)
 
     import runpy
     import sys
@@ -90,13 +89,28 @@ def test_run_py_configures_mock_provider_by_default(monkeypatch):
     assert isinstance(app, FastAPI)
 
 
-def test_run_py_create_app_has_static_dir(monkeypatch):
-    """run.py's create_app call must include a static_dir kwarg."""
-    monkeypatch.delenv("SW_LLM_PROVIDER", raising=False)
-    monkeypatch.delenv("SW_API_KEY", raising=False)
-
-    # Check that run.py source mentions static_dir
+def test_run_py_uses_canonical_configuration_names():
+    """run.py must use the same environment contract as the API module."""
     src = (Path(__file__).parent.parent / "run.py").read_text()
-    assert "static_dir" in src, (
-        "run.py must pass static_dir to create_app"
-    )
+
+    assert "from scriptweaver.api.app import app" in src
+    assert 'os.getenv("SCRIPTWEAVER_PORT", "8000")' in src
+    assert "SW_LLM_PROVIDER" not in src
+    assert "SW_API_KEY" not in src
+    assert "SW_PORT" not in src
+
+
+def test_demo_script_uses_canonical_default_port():
+    """The demo client must target the same configurable server port."""
+    src = (Path(__file__).parent.parent / "demo.sh").read_text()
+
+    assert 'SCRIPTWEAVER_PORT:-8000' in src
+    assert "8137" not in src
+
+
+def test_demo_script_is_repeatable_and_url_encodes_metadata():
+    """Repeated demos must avoid job collisions and encode Chinese metadata."""
+    src = (Path(__file__).parent.parent / "demo.sh").read_text()
+
+    assert "SCRIPTWEAVER_DEMO_JOB" in src
+    assert "--data-urlencode" in src
