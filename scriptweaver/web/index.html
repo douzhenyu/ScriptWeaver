@@ -52,6 +52,10 @@ button { border: none; cursor: pointer; font-weight: 500; white-space: nowrap; }
 .decision-item.merge { border-left-color:#2563eb; }
 .decision-item.rewrite { border-left-color:#059669; }
 .decision-reason,.decision-source { color:var(--muted); font-size:13px; margin-top:4px; }
+.view-tabs { display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--border); }
+.view-tabs button { background:transparent; color:var(--muted); border-radius:0; border-bottom:2px solid transparent; padding:9px 14px; }
+.view-tabs button:hover { color:var(--text); background:var(--card); }
+.view-tabs button.active { color:var(--primary); border-bottom-color:var(--primary); }
 .beat { padding: 6px 10px; margin: 4px 0; border-radius: 4px; font-size: 13px; }
 .beat.action { background: #e9ecef; }
 .beat.dialogue { background: #cfe2ff; }
@@ -97,6 +101,12 @@ pre { background: #f1f3f5; padding: 12px; border-radius: var(--radius); overflow
     <div class="row" style="margin-top:8px"><input type="file" id="file-input" accept=".txt" onchange="handleFile(this)"><button class="btn-primary" onclick="uploadText()">上传文本</button></div>
   </div>
 
+  <nav id="task-view-nav" class="view-tabs hidden" aria-label="任务视图">
+    <button type="button" data-view="analysis" onclick="showTaskView('analysis')">AI 分析</button>
+    <button type="button" data-view="plan" onclick="showTaskView('plan')">改编计划</button>
+    <button type="button" data-view="screenplay" onclick="showTaskView('screenplay')">剧本</button>
+  </nav>
+
   <div id="analysis-result" class="card hidden">
     <h2>3. AI 分析结果</h2>
     <div id="analysis-content"></div>
@@ -135,6 +145,7 @@ function toggleDark(){const el=document.documentElement;const is=el.getAttribute
 
 const API_BASE = 'http://127.0.0.1:8000';
 let jobId = '';
+let currentJob = null;
 let uncertaintyIndex = 0;
 let uncertainties = [];
 let charNames = {};  // character_id → name lookup
@@ -184,6 +195,47 @@ function setStep(n) {
   document.querySelectorAll('.steps span').forEach((s,i)=>s.classList.toggle('active', i+1===n));
 }
 
+function availableTaskViews(job) {
+  if (!job) return [];
+  const views = [];
+  if (job.ai_analysis) views.push('analysis');
+  if (job.adaptation_plan) views.push('plan');
+  if (job.screenplay_draft) views.push('screenplay');
+  return views;
+}
+
+function latestTaskView(job) {
+  const views = availableTaskViews(job);
+  if (views.includes('screenplay')) return 'screenplay';
+  if (views.includes('plan')) return 'plan';
+  if (views.includes('analysis')) return 'analysis';
+  return null;
+}
+
+function syncTaskViewNav(job) {
+  currentJob = job;
+  const views = availableTaskViews(job);
+  const nav = document.getElementById('task-view-nav');
+  nav.classList.toggle('hidden', views.length===0);
+  nav.querySelectorAll('[data-view]').forEach(btn=>{
+    btn.classList.toggle('hidden', !views.includes(btn.dataset.view));
+    btn.classList.remove('active');
+    btn.setAttribute('aria-selected', 'false');
+  });
+}
+
+function showTaskView(view) {
+  if (!availableTaskViews(currentJob).includes(view)) return;
+  if (view==='analysis') { show('analysis-result'); setStep(3); }
+  if (view==='plan') { show('plan-result'); setStep(6); }
+  if (view==='screenplay') { show('screenplay-result', 'export-section'); setStep(9); }
+  document.querySelectorAll('#task-view-nav [data-view]').forEach(btn=>{
+    const active = btn.dataset.view===view;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', String(active));
+  });
+}
+
 async function createJob() {
   const btn = document.querySelector('#create-job .btn-primary');
   jobId = document.getElementById('job-id').value.trim();
@@ -191,6 +243,7 @@ async function createJob() {
   setLoading(btn, true, '创建中…');
   try {
     await api('POST','/jobs',{job_id:jobId});
+    syncTaskViewNav(null);
     show('upload-chapters'); setStep(2);
     loadJobList();
   } catch(e) { showError(e.message); }
@@ -213,10 +266,14 @@ async function resumeJob(id) {
   jobId = id;
   const job = await api('GET','/jobs/'+id);
   hydrateSourceLookups(job);
-  if (job.chapters && job.chapters.length) show('upload-chapters');
-  if (job.ai_analysis) { renderAnalysis(job.ai_analysis); show('analysis-result'); setStep(3); }
-  if (job.adaptation_plan) { renderPlan(job.adaptation_plan); show('plan-result'); setStep(6); }
+  if (job.ai_analysis) renderAnalysis(job.ai_analysis);
+  if (job.adaptation_plan) renderPlan(job.adaptation_plan);
   if (job.screenplay_draft) { renderScreenplay(job.screenplay_draft); }
+  syncTaskViewNav(job);
+  const latestView = latestTaskView(job);
+  if (latestView) showTaskView(latestView);
+  else if (job.chapters && job.chapters.length) { show('upload-chapters'); setStep(2); }
+  else { show('create-job'); setStep(1); }
   document.getElementById('job-id').value = id;
 }
 
@@ -260,7 +317,8 @@ async function doAnalyze() {
   const job = await api('GET','/jobs/'+jobId);
   hydrateSourceLookups(job);
   renderAnalysis(job.ai_analysis);
-  show('analysis-result'); setStep(3);
+  syncTaskViewNav(job);
+  showTaskView('analysis');
   if (job.ai_analysis.uncertainties && job.ai_analysis.uncertainties.length>0) {
     document.getElementById('start-qa-btn').classList.remove('hidden');
     document.getElementById('skip-qa-btn').classList.add('hidden');
@@ -348,7 +406,8 @@ async function confirmAnalysis() {
     const job = await api('GET','/jobs/'+jobId);
     hydrateSourceLookups(job);
     renderPlan(job.adaptation_plan);
-    show('plan-result'); setStep(6);
+    syncTaskViewNav(job);
+    showTaskView('plan');
   } catch(e) { showError(e.message); }
   finally { setLoading(btn, false); }
 }
@@ -449,6 +508,8 @@ async function confirmPlan() {
     await api('POST','/jobs/'+jobId+'/generate-screenplay');
     const j = await api('GET','/jobs/'+jobId);
     renderScreenplay(j.screenplay_draft);
+    syncTaskViewNav(j);
+    showTaskView('screenplay');
   } catch(e) { showError(e.message); }
   finally { setLoading(btn, false); }
 }
@@ -477,7 +538,6 @@ function renderScreenplay(draft) {
     const beatDiv = e.target.closest('[data-scene]');
     if (beatDiv) editBeat(+beatDiv.dataset.scene, +beatDiv.dataset.beat);
   });
-  show('screenplay-result', 'export-section'); setStep(9);
 }
 
 function editBeat(si, bi) {

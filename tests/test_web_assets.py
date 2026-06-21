@@ -122,3 +122,55 @@ def test_confirm_plan_preserves_ai_decision_fields():
             rf"\s*\|\|\s*\[\s*\]",
             confirm_body,
         ), f"confirmPlan must preserve scene.{field}"
+
+
+def test_task_view_navigation_exposes_three_artifact_tabs():
+    content = _index_html()
+    assert 'id="task-view-nav"' in content
+    for view, label in (
+        ("analysis", "AI 分析"),
+        ("plan", "改编计划"),
+        ("screenplay", "剧本"),
+    ):
+        assert re.search(
+            rf'<button[^>]+data-view=["\']{view}["\'][^>]*>{label}</button>',
+            content,
+        ), f"Missing {label} task-view button"
+
+
+def test_task_view_availability_comes_from_persisted_artifacts():
+    available_body = _function_body(_index_html(), "availableTaskViews")
+    for artifact in ("ai_analysis", "adaptation_plan", "screenplay_draft"):
+        assert re.search(rf"job\s*\.\s*{artifact}\b", available_body)
+
+    latest_body = _function_body(_index_html(), "latestTaskView")
+    assert latest_body.index("screenplay") < latest_body.index("plan")
+    assert latest_body.index("plan") < latest_body.index("analysis")
+
+
+def test_show_task_view_controls_cards_export_and_step_highlight():
+    body = _function_body(_index_html(), "showTaskView")
+    assert re.search(r"show\s*\(\s*['\"]analysis-result['\"]\s*\)", body)
+    assert re.search(r"show\s*\(\s*['\"]plan-result['\"]\s*\)", body)
+    assert re.search(
+        r"show\s*\(\s*['\"]screenplay-result['\"]\s*,\s*"
+        r"['\"]export-section['\"]\s*\)",
+        body,
+    )
+    for step in (3, 6, 9):
+        assert re.search(rf"setStep\s*\(\s*{step}\s*\)", body)
+
+
+def test_resume_job_renders_artifacts_then_opens_latest_task_view():
+    body = _function_body(_index_html(), "resumeJob")
+    for renderer in ("renderAnalysis", "renderPlan", "renderScreenplay"):
+        assert re.search(rf"{renderer}\s*\(", body)
+    assert re.search(r"syncTaskViewNav\s*\(\s*job\s*\)", body)
+    assert re.search(r"latestView\s*=\s*latestTaskView\s*\(\s*job\s*\)", body)
+    assert re.search(r"showTaskView\s*\(\s*latestView\s*\)", body)
+
+
+def test_screenplay_renderer_does_not_change_the_selected_view():
+    body = _function_body(_index_html(), "renderScreenplay")
+    assert "show('screenplay-result'" not in body
+    assert 'show("screenplay-result"' not in body
