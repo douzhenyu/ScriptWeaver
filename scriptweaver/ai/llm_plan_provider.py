@@ -30,9 +30,9 @@ and the original chapters, produce a structured adaptation plan.
 
 Return a JSON object with exactly these keys:
 
-- "target_format": string (e.g., "1-3 minute short drama")
+- "target_format": string (e.g., "1-3 分钟短剧")
 - "structure": string describing the overall narrative structure
-  (e.g., "5 scenes, linear narrative with flashback")
+  (e.g., "5 场，线性叙事并包含闪回")
 - "scenes": list of scene objects, each with fields:
   id (unique string), scene_order (int), title (string),
   dramatic_purpose (string), character_ids (list of strings),
@@ -53,6 +53,14 @@ A decision object has fields:
 A question object has fields:
   id (unique string), question (string), context (string),
   related_scene_ids (list of strings)
+
+IMPORTANT — Language requirement:
+- Write every author-facing string value in Simplified Chinese (简体中文).
+- This applies to target_format, structure, scene title,
+  dramatic_purpose, decision description and reason, and review question
+  question and context.
+- Keep JSON keys, ids, character_ids, source references, and other internal
+  identifiers unchanged.
 
 IMPORTANT — Scene count guidance:
 - Typically 1-2 scenes per chapter, depending on content density.

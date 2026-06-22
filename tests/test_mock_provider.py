@@ -60,3 +60,28 @@ def test_mock_plan_empty_events_produces_empty_retained():
     assert len(plan.scenes) == 1
     assert plan.scenes[0].retained_event_ids == []
     assert plan.scenes[0].compression_choices[0].source_event_ids == []
+
+
+def test_mock_plan_uses_chinese_display_text():
+    provider = MockPlanProvider()
+    chapters = [
+        Chapter(index=i, title=f"第{i}章", content=f"第{i}章内容。")
+        for i in range(1, 4)
+    ]
+
+    plan = provider.generate_plan(AIAnalysis(), chapters)
+
+    assert plan.target_format == "1-3 分钟短剧"
+    assert plan.structure == "3 场，线性叙事"
+    scene = plan.scenes[0]
+    author_facing_text = (
+        scene.dramatic_purpose,
+        scene.compression_choices[0].description,
+        scene.compression_choices[0].reason,
+        scene.review_questions[0].question,
+        scene.review_questions[0].context,
+    )
+    assert all(
+        any("\u4e00" <= character <= "\u9fff" for character in value)
+        for value in author_facing_text
+    )

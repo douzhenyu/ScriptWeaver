@@ -189,6 +189,30 @@ def test_passes_chapters_to_llm():
     assert "林照收到密信" in client.last_input_prompt
 
 
+def test_system_prompt_requires_chinese_author_facing_fields():
+    from scriptweaver.ai.llm_plan_provider import LLMPlanProvider
+
+    client = FakeLLMClient(make_valid_llm_response())
+    provider = LLMPlanProvider(client)
+
+    provider.generate_plan(make_confirmed_analysis(), make_chapters())
+
+    prompt = client.last_system_prompt
+    assert prompt is not None
+    assert "简体中文" in prompt
+    for field in (
+        "target_format",
+        "structure",
+        "title",
+        "dramatic_purpose",
+        "description",
+        "reason",
+        "question",
+        "context",
+    ):
+        assert field in prompt
+
+
 def test_wraps_llm_error():
     from scriptweaver.ai.llm_plan_provider import LLMPlanProvider
 

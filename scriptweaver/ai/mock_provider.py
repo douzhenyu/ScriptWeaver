@@ -151,8 +151,8 @@ class MockPlanProvider:
         event_ids = [e.id for e in confirmed_analysis.key_events]
 
         return AdaptationPlan(
-            target_format="1-3 minute short drama",
-            structure=f"{len(chapters)} scenes, linear narrative",
+            target_format="1-3 分钟短剧",
+            structure=f"{len(chapters)} 场，线性叙事",
             scenes=[
                 ScenePlan(
                     id=f"scene_{i:03d}",
