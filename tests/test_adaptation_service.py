@@ -1120,7 +1120,7 @@ def test_generate_plan_with_mock_provider():
     assert updated_job.state == AdaptationState.PLAN_GENERATED
     plan = updated_job.adaptation_plan
     assert plan is not None
-    assert plan.target_format == "1-3 minute short drama"
+    assert plan.target_format == "1-3 分钟短剧"
     assert len(plan.scenes) == 3
     assert plan.scenes[0].scene_order == 1
     assert len(plan.scenes[0].compression_choices) == 1
